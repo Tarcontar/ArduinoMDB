@@ -1,5 +1,6 @@
 #include <SoftwareSerial.h>
 
+//REGISTERS
 #define TXB8 0
 #define UPE 2
 #define DOR 3
@@ -7,38 +8,50 @@
 #define UDRE 5
 #define RXC 7
 
+//DATA_MODES
 #define ADDRESS 1
 #define DATA 0
 #define DATA_MAX 36
 
 //TIMINGS
 #define TIME_OUT 5
-#define CHANGER_NO_RESPONSE 2000
-
-
-//ADDRESSES
-#define COIN_CHANGER 0x08
-#define BILL_VALIDATOR 0x30
 
 //COMMANDS
 #define ACK 0x00
 #define RET 0xAA
 #define NAK 0xFF
 
+#define VALIDATOR_JUST_RESET 0x06
+
 #define RESET 0x00
 #define SETUP 0x01
 #define STATUS 0x02
-#define BILL_SECURITY 0x02
 #define POLL 0x03
 #define TYPE 0x04
-#define COIN_DISPENSE 0x05
-#define BILL_ESCROW 0x05
 #define EXPANSION_CMD 0x07
+
+//COIN_CHANGER
+bool coin_changer_available = false;
+#define COIN_CHANGER 0x08
+#define CHANGER_NO_RESPONSE 2000
+#define CHANGER_JUST_RESET 0x0B
+#define COIN_DISPENSE 0x05
+
+int coin_scaling_factor = 0;
+int coin_type_values[16];
+
+
+//BILL_VALIDATOR
+bool bill_validator_available = false;
+#define BILL_VALIDATOR 0x30
+#define BILL_SECURITY 0x02
+#define BILL_ESCROW 0x05
+
+
 
 int data_count = 0;
 unsigned char in_buffer[40];
 int out_buffer[40];
-
 
 unsigned long _commandSentTime;
 
@@ -53,12 +66,21 @@ void setup()
 
   Reset(COIN_CHANGER);
   delay(500);
- //Enable(COIN_CHANGER);
+  Enable(COIN_CHANGER);
 }
 
 void loop()
 {
-
+  //HardReset();
+  //delay(5000);
+  //SendCommand(BILL_VALIDATOR, POLL);
+  //delay(500);
+  //SendCommand(BILL_VALIDATOR, STATUS);
+  //delay(500);
+  Enable(COIN_CHANGER);
+  delay(500);
+  Dispense_Coin(1, 0);
+  delay(500);
 }
 
 void Enable(unsigned char address)
@@ -67,11 +89,6 @@ void Enable(unsigned char address)
   Status(address);
   Type(address);
   Serial.println("ENABLE_SUCCEEDED");
-}
-
-void Error(unsigned char address)
-{
-  Poll(address);
 }
 
 void Reset(unsigned char address)
@@ -88,7 +105,7 @@ void Reset(unsigned char address)
     Serial.println("RESET_SUCCEEDED");
     return;
   }
-  println("RESET_FAILED: ", data_count);
+  //println("RESET_FAILED: ", data_count);
   delay(1000);
   Reset(address);
 }
@@ -96,20 +113,133 @@ void Reset(unsigned char address)
 void Poll(unsigned char address)
 {
   SendCommand(address, POLL);
-  if (((GetResponse(&data_count) == ACK) && (data_count == 1)) || (data_count == 16))
+  int result = GetResponse(&data_count);
+  if (((result == ACK) && (data_count == 1)) || (data_count == 16))
   {
     SendACK();
     println("POLL_SUCCEEDED: ", data_count);
     return;
+  }
+  //got a just reset response
+  else if (data_count == 1)
+  {
+    if (address == COIN_CHANGER)
+    {
+      int result = processChangerPoll();
+      if (result == CHANGER_JUST_RESET)
+      {
+        SendACK();
+        println("POLL_SUCCEEDED: ", data_count);
+        return;
+      }
+    }
   }
   Serial.println("POLL_FAILED");
   delay(1000);
   Poll(address);
 }
 
+float credit = 0.0f;
+int processChangerPoll()
+{
+  //coins dispensed manually
+  if (in_buffer[0] & 0b10000000)
+  {
+    int number = in_buffer[0] & 0b01110000;
+    int coin_type = in_buffer[0] & 0b00001111;
+    int coins_in_tube = in_buffer[1];
+    Serial.println("coins dispensed manually");
+  }
+  //coins deposited
+  else if (in_buffer[0] & 0b01000000)
+  {
+    int routing = in_buffer[0] & 0b00110000;
+    int coin_type = in_buffer[0] & 0b00001111;
+    int coins_in_tube = in_buffer[1];
+    if (routing < 2) 
+    {
+      credit += coin_type_values[coin_type] * coin_scaling_factor;
+      Serial.println("coins added to credit");
+    }
+    else
+    {
+      Serial.println("coin rejected");
+    }
+  }
+  //slug
+  else if (in_buffer[0] & 0b00100000)
+  {
+    int slug_count = in_buffer[0] & 0b00011111;
+  }
+  //status
+  else
+  {
+    Serial.println("changer status message....");
+    int state = in_buffer[0]; 
+    switch (state)
+    {
+      case 1:
+        //escrow request
+        Serial.println("NOT_IMPLEMENTED: escrow request");
+        break;
+      case 2:
+        //changer payout busy
+        Serial.println("NOT_IMPLEMENTED: payout busy");
+        break;
+      case 3:
+        //no credit
+        Serial.println("NOT_IMPLEMENTED: no credit");
+        break;
+      case 4:
+        //defective tube sensor
+        Serial.println("NOT_IMPLEMENTED: tube sensor defect");
+        break;
+      case 5:
+        //double arrival
+        Serial.println("NOT_IMPLEMENTED: double arrival");
+        break;
+      case 6:
+        //acceptor unplugged
+        Serial.println("NOT_IMPLEMENTED: acceptor unplugged");
+        break;
+      case 7:
+        //tube jam
+        Serial.println("NOT_IMPLEMENTED: tube jam");
+        break;
+      case 8:
+        //ROM checksum error
+        Serial.println("NOT_IMPLEMENTED: checksum error");
+        break;
+      case 9:
+        //coin routing error
+        Serial.println("NOT_IMPLEMENTED: coin routing error");
+        break;
+      case 10:
+        //changer busy
+        Serial.println("NOT_IMPLEMENTED: changer busy");
+        break;
+      case 11:
+        //changer was reset
+        Serial.println("changer was just reset");
+        return CHANGER_JUST_RESET;
+        break;
+      case 12:
+        //coin jam 
+        Serial.println("NOT_IMPLEMENTED: coin jam");
+        break;
+      case 13:
+        //possible credited coin removal
+        Serial.println("NOT_IMPLEMENTED: possible credited coi removal");
+        break;
+    }
+  }
+  return 1;
+}
+
+//make this unique for every device??
 void Setup(unsigned char address)
 {
-  SendCommand(address, STATUS);
+  SendCommand(address, SETUP);
   if (GetResponse(&data_count) && data_count == 23)
   {
     SendACK();
@@ -117,7 +247,16 @@ void Setup(unsigned char address)
     Serial.println(data_count);
     return;
   }
+  //we get only 3 bytes here why?
+  if (data_count <= 3)
+  {
+    SendACK();
+    Serial.println("SETUP_SUCCEEDED");
+    Serial.println(data_count);
+    return;
+  }
   println("SETUP_FAILED: ", data_count);
+  SendACK();
   delay(1000);
   Setup(address);
 }
@@ -130,6 +269,13 @@ void Status(unsigned char address)
     SendACK();
     Serial.println("STATUS_SUCCEEDED");
     Serial.println(data_count);
+  }
+   //we get only 3 bytes here why?
+  if (data_count <= 3)
+  {
+    SendACK();
+    Serial.println("STATUS_SUCCEEDED");
+    return;
   }
   println("STATUS_FAILED: ", data_count);
   delay(1000);
@@ -150,6 +296,27 @@ void Type(unsigned char address)
     Type(address);
   }
   Serial.println("TYPE_SUCCEEDED");
+}
+
+//only valid for coin changer??
+void Dispense_Coin(int count, int coin)
+{
+  // 0 = 5c
+  // 1 = 10c
+  // 2 = 20c
+  // 3 = 50c
+  // 4 = 1E
+  // 5 = 2E
+  out_buffer[0] = (count << 4) | coin;
+  out_buffer[0] = 0x10;
+  SendCommand(COIN_CHANGER, COIN_DISPENSE, 1);
+  if (GetResponse(&data_count) != ACK)
+  {
+    Serial.println("DISPENSE_FAILED");
+    delay(500);
+    Dispense_Coin(count, coin);
+  }
+  Serial.println("DISPENSED");
 }
 
 void Expansion(unsigned char address, unsigned char sub_cmd)
@@ -252,9 +419,11 @@ void SendNAK()
 void send(unsigned char cmd, int mode)
 {
   while(!(UCSR1A & (1<<UDRE)));
-  UCSR1B &= ~(1<<TXB8);
   if (mode)
     UCSR1B |= (1<<TXB8);
+  else
+    UCSR1B &= ~(1<<TXB8);
+  //UDR1 = reverse(cmd);
   UDR1 = cmd;
   _commandSentTime = millis();
 }
@@ -272,15 +441,40 @@ int GetResponse(int *count)
       return -1;
     }
   }
+  int sum = 0;
   while(available() && !mode && *count < DATA_MAX)
   {
     if (receive(&in_buffer[*count], &mode))
     {
-      if ((in_buffer[*count] == ACK) && (mode == 1))
-        return ACK;
+      sum += in_buffer[*count];
       (*count)++;
+      if ((*count == 1) && mode == 1)
+      {
+        if (in_buffer[(*count)-1] == ACK)
+        {
+          return ACK;
+        }
+        else if (in_buffer[(*count)-1] == NAK)
+        {
+          return NAK;
+        }
+        else if (in_buffer[(*count)-1] == RET)
+        {
+          return RET;
+        }
+      }
     }
   }
+  /*
+  if (mode)
+  {
+    if (sum != in_buffer[*count - 1])
+    {
+      Serial.println("CHECKSUM WRONG");
+      return -1;
+    }
+  }
+  */
   return 1;
 }
 
@@ -296,16 +490,19 @@ int receive(unsigned char *data, int *mode)
   resh = UCSR1B;
   resl = UDR1;
 
+  Serial.println(resl);
+
+  /*
   if (status & ((1<<FE) | (1<<DOR) | (1<<UPE)))
   {
-    Serial.println("STATUS ERROR");
+    Serial.println("RECEIVE STATUS ERROR");
     return 0;
   }
+  */
   
   (*mode) = (resh >> 1) & 0x01;
-  (*data) = resl; 
   Serial.println(*mode);
-  Serial.println(*data);
+  (*data) = resl; 
   return 1;
 }
 
@@ -317,10 +514,12 @@ int available()
 void HardReset()
 {
   pinMode(18, OUTPUT);
-  digitalWrite(18, LOW);
-  delay(200);
   digitalWrite(18, HIGH);
-  delay(200);
+  delay(210);
+  digitalWrite(18, LOW);
+  delay(100);
+  digitalWrite(18, HIGH);
+  mdb_uart_init();
 }
 
 void mdb_uart_init()
@@ -328,6 +527,7 @@ void mdb_uart_init()
   UCSR1B = (1<<RXEN1)|(1<<TXEN1);
   UBRR1H = 0;
   UBRR1L = 103; // 9600baud
+  UCSR1A &= ~(1 << U2X1); //disable rate doubler
   UCSR1C |= (1<<UCSZ11)|(1<<UCSZ10); //9bit mode
   UCSR1B |= (1<<UCSZ12); //also for 9 bit mode
   UCSR1C = UCSR1C | B00000100; //one stop bit
@@ -340,6 +540,4 @@ void println(String msg, int val)
   Serial.print(val);
   Serial.print("\n");
 }
-
-
 
