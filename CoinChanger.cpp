@@ -1,18 +1,21 @@
 #include "CoinChanger.h"
 
-CoinChanger::CoinChanger()
+CoinChanger::CoinChanger(MDBSerial &mdb, HardwareSerial &print)
 {
-	m_serial = MDBSerial();
+	m_serial = &mdb;
+
+	serial = &print;
+	serial->begin(9600);
 }
 
 void CoinChanger::Reset()
 {
-	m_serial.SendCommand(ADDRESS, RESET);
-	if ((*m_serial.GetRespose(&m_count) == ACK) && (m_count == 1))
+	m_serial->SendCommand(ADDRESS, RESET);
+	if ((*m_serial->GetResponse(&m_count) == ACK) && (m_count == 1))
 	{
 		if (Poll() != JUST_RESET)
-			//error
-		Setup();
+			serial->println("no just_reset");
+		setup();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
@@ -29,14 +32,14 @@ void CoinChanger::Enable()
 
 int CoinChanger::Poll()
 {
-	m_serial.SendCommand(ADDRESS, POLL);
-	int *result = m_serial.GetRespose(&m_count);
+	m_serial->SendCommand(ADDRESS, POLL);
+	int *result = m_serial->GetResponse(&m_count);
 	if (m_count == 1)
 	{
 		if (*result == ACK)
 		{
 			m_serial.Ack();
-			return;
+			return 1;
 		}
 		//error
 	}
@@ -57,7 +60,7 @@ int CoinChanger::Poll()
 			int coins_in_tube = result[1];
 			if (routing < 2)
 			{
-				credit += m_type_values[type] * m_scaling_factor;
+				m_credit += m_type_values[type] * m_scaling_factor;
 			}
 			//else coin rejected
 		}
@@ -112,7 +115,7 @@ int CoinChanger::Poll()
 				break;
 			}
 		}
-		m_serial.Ack();
+		m_serial->Ack();
 	}
 	return 1;
 }
@@ -120,8 +123,8 @@ int CoinChanger::Poll()
 void CoinChanger::Dispense(int coin, int count)
 {
 	int out = (count << 4) | coin;
-	m_serial.SendCommand(ADDRESS, DISPENSE, &out, 1);
-	if (*m_serial.GetResponse(&m_count) == ACK)
+	m_serial->SendCommand(ADDRESS, DISPENSE, &out, 1);
+	if (*m_serial->GetResponse(&m_count) == ACK)
 	{
 		return;
 	}
@@ -131,37 +134,37 @@ void CoinChanger::Dispense(int coin, int count)
 
 void CoinChanger::setup()
 {
-	m_serial.SendCommand(ADDRESS, SETUP);
-	if (*m_serial.GetRespose(&m_count) && m_count == 23)
+	m_serial->SendCommand(ADDRESS, SETUP);
+	if (*m_serial->GetResponse(&m_count) && m_count == 23)
 	{
-		m_serial.Ack();
+		m_serial->Ack();
 		return;
 	}
 	else //we only get 3 bytes here
 	{
-		m_serial.Ack();
+		m_serial->Ack();
 	}
 }
 
 void CoinChanger::status()
 {
-	m_serial.SendCommand(ADDRESS, STATUS);
-	if (m_serial.GetRespose(&m_count) && m_count == 18)
+	m_serial->SendCommand(ADDRESS, STATUS);
+	if (m_serial->GetResponse(&m_count) && m_count == 18)
 	{
-		m_serial.Ack();
+		m_serial->Ack();
 		return;
 	}
 	else //we only get 3 bytes here
 	{
-		m_serial.Ack();
+		m_serial->Ack();
 	}
 }
 
 void CoinChanger::type()
 {
-	int out = {0xff, 0xff, 0xff, 0xff};
-	m_serial.SendCommand(ADDRESS, TYPE, &out, 4);
-	if (m_serial.GetRespose(&m_count) == ACK)
+	int out[4] = {0xff, 0xff, 0xff, 0xff};
+	m_serial->SendCommand(ADDRESS, TYPE, out, 4);
+	if (m_serial->GetResponse(&m_count) == ACK)
 	{
 		return;
 	}

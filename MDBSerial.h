@@ -8,21 +8,6 @@
 #define UDRE 5
 #define RXC 7
 
-#define UDRn UDR0
-#define RXENn RXEN0
-#define TXENn TXEN0
-#define UBRRnH UBRR0H
-#define UBRRnL UBRR0L
-#define UCSRnA UCSR0A
-#define UCSRnB UCSR0B
-#define UCSRnC UCSR0C
-#define UCSZn0 UCSZ00
-#define UCSZn1 UCSZ01
-#define UCSZn2 UCSZ02
-
-
-#define ADDRESS 1
-#define DATA 0
 #define DATA_MAX 36
 
 #define TIME_OUT 5
@@ -41,23 +26,40 @@
 class MDBSerial
 {
 public:
-	MDBSerial();
+	MDBSerial(int uart = 0);
 
 	void Ack();
 	void Nak();
 	void Ret();
 
-	void SendCommand(unsigned char address, unsigned char cmd, unsigned char *data = 0, unsigned int dataCount = 0);
-	int *GetRespose(int *count);
+	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
+	int* GetResponse(int *count);
 
 private:
+	enum MODE {
+		DATA = 0,
+		ADDRESS = 1
+	};
+
 	void init();
 	void write(char cmd, int mode);
-	int read(unsigned char *data, int *mode);
+	int read(int *data, int *mode);
 	bool available();
 
 	unsigned long m_commandSentTime;
-	unsigned char input_buffer[DATA_MAX];
+	int input_buffer[DATA_MAX];
+
+	int m_UDRn;
+	int m_RXENn;
+	int m_TXENn;
+	int m_UBRRnH;
+	int m_UBRRnL;
+	int m_UCSRnA;
+	int m_UCSRnB;
+	int m_UCSRnC;
+	int m_UCSZn0;
+	int m_UCSZn1;
+	int m_UCSZn2;
 };
 
 

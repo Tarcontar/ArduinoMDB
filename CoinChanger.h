@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MDBSerial.h"
+#include "HardwareSerial.h"
 
 #define ADDRESS 0x08
 #define JUST_RESET 0x0B
@@ -8,10 +9,11 @@
 
 #define NO_RESPONSE 2000
 
+
 class CoinChanger
 {
 public:
-	CoinChanger();
+	CoinChanger(MDBSerial &mdb, HardwareSerial &print);
 
 	void Reset();
 	void Enable();
@@ -19,6 +21,8 @@ public:
 	void Dispense(int coin, int count);
 
 private:
+	HardwareSerial *serial;
+
 	void setup();
 	void status();
 	void type();
