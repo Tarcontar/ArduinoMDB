@@ -16,22 +16,22 @@ MDBSerial::MDBSerial()
 	init();
 }
 
-void MDBSerial::ACK()
+void MDBSerial::Ack()
 {
 	write(ACK, DATA);
 }
 
-void MDBSerial::NAK()
+void MDBSerial::Nak()
 {
 	write(NAK, DATA);
 }
 
-void MDBSerial::RET()
+void MDBSerial::Ret()
 {
 	write(RET, DATA);
 }
 
-void SendCommand(unsigned char address, unsigned char cmd, unsigned char *data = 0, unsigned int dataCount = 0)
+void MDBSerial::SendCommand(unsigned char address, unsigned char cmd, unsigned char *data = 0, unsigned int dataCount = 0)
 {
 	unsigned char sum = 0;
 	write(address | cmd, ADDRESS);
@@ -45,6 +45,34 @@ void SendCommand(unsigned char address, unsigned char cmd, unsigned char *data =
 
 	//send the checksum
 	write(sum, DATA);
+}
+
+int *MDBSerial::GetResponse(int *count, unsigned char *data)
+{
+	int mode = 0;
+	int sum = 0;
+	*count = 0;
+	while (!available())
+	{
+		if ((millis() - m_commandSentTime) > TIME_OUT)
+		{
+			return -1;
+		}
+	}
+	while (available() && !mode && *count < DATA_MAX)
+	{
+		if (read(&input_buffer[*count], &mode))
+		{
+			sum += input_buffer[*count];
+			*count++;
+			if ((*count == 1) && mode == 1)
+			{
+				return &input_buffer[(*count) - 1];
+			}
+		}
+	}
+	//TODO: check if checksum is correct
+	return input_buffer;
 }
 
 void MDBSerial::init()
@@ -70,7 +98,7 @@ void MDBSerial::write(char cmd, int mode)
 	m_commandSentTime = millis();
 }
 
-int receive(unsigned char *data, int *mode)
+int MDBSerial::read(unsigned char *data, int *mode)
 {
 	unsigned char status, resh, resl;
 	if (!available())
@@ -90,7 +118,7 @@ int receive(unsigned char *data, int *mode)
 	return 1;
 }
 
-bool available()
+bool MDBSerial::available()
 {
 	return (UCSRnA & (1 << RXC));
 }

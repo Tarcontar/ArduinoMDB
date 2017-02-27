@@ -1,34 +1,32 @@
-#ifndef CoinChanger_h
-#define CoinChanger_h
+#pragma once
 
-#define address 0x08
-#define no_response_time 2000
+#include "MDBSerial.h"
 
-#define just_reset 0x0B
-#define dispense 0x05
+#define ADDRESS 0x08
+#define JUST_RESET 0x0B
+#define DISPENSE 0x05
 
-int coin_scaling_factor = 0;
-int coin_type_values[16];
-float credit = 0.0f;
+#define NO_RESPONSE 2000
 
 class CoinChanger
 {
-    public:
-        CoinChanger();
-        ~CoinChanger();
+public:
+	CoinChanger();
 
-        bool Create();
+	void Reset();
+	void Enable();
+	int Poll();
+	void Dispense(int coin, int count);
 
-        void Enable();
-        void Dispense();
-        void Poll();
+private:
+	void setup();
+	void status();
+	void type();
+	void expansion();
 
-    private:
-        void Reset();
-        void Setup();
-        void Status();
-        void Type();
-        void Expansion();
-}
-
-#endif
+	MDBSerial m_serial;
+	int m_count;
+	float m_credit;
+	int m_scaling_factor;
+	int m_type_values[16];
+};

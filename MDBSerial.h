@@ -43,19 +43,21 @@ class MDBSerial
 public:
 	MDBSerial();
 
-	void ACK();
-	void NAK();
-	void RET();
+	void Ack();
+	void Nak();
+	void Ret();
 
 	void SendCommand(unsigned char address, unsigned char cmd, unsigned char *data = 0, unsigned int dataCount = 0);
+	int *GetRespose(int *count);
 
 private:
 	void init();
 	void write(char cmd, int mode);
-	int receive(unsigned char *data, int *mode);
+	int read(unsigned char *data, int *mode);
 	bool available();
 
 	unsigned long m_commandSentTime;
+	unsigned char input_buffer[DATA_MAX];
 };
 
 
