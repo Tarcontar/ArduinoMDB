@@ -39,7 +39,7 @@ public:
 	void Ret();
 
 	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
-	int GetResponse(int *count, int **data = 0);
+	int GetResponse(int **data = nullptr, int *count = nullptr);
 
 private:
 	HardwareSerial *serial;
@@ -52,8 +52,6 @@ private:
 	void hardReset();
 	void init();
 	void write(int cmd, int mode);
-	int read(volatile int *data, int *mode);
-	bool available();
 
 	unsigned long m_commandSentTime;
 

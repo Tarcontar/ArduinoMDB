@@ -2,22 +2,26 @@
 #include <Arduino.h>
 #include <avr/interrupt.h>
 
-volatile int input_buffer[999];
-volatile int modes[999];
+struct data
+{
+	uint8_t value;
+	uint8_t mode;
+};
+
+volatile data buffer[100];
 volatile int pos = 0;
+volatile bool error = false;
 
 ISR(USART1_RX_vect) 
 {
-	/*if (UCSR3B & (1 << 2)) 
+	int status = (uint8_t)UCSR1A;
+	
+	/*if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
 	{
-		data = ((UCSR3B >> 1) & 0x01);
-		write_buffer(3, RX, data);
+		error = true;
 	}*/
-
-	int resh = UCSR1B;
-	modes[pos] = (resh >> 1) & 0x01;
-
-	input_buffer[pos] = UDR1;
+	buffer[pos].mode = (uint8_t)((UCSR1B >> 1) & 0x01);
+	buffer[pos].value = (uint8_t)UDR1;
 	pos++;
 }
 
@@ -132,42 +136,53 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 		write(data[i], DATA);
 		sum += data[i];
 	}
-
-	//send the checksum
-	write(sum, DATA);
+	write(sum, DATA); //send the checksum
 }
 
-int MDBSerial::GetResponse(int *count, int **data)
+int MDBSerial::GetResponse(int **data, int *count)
 {
-	int mode = 0;
-	int sum = 0;
-	*count = 0;
-	/*while (!available())
+	uint8_t sum = 0;
+	if (count != nullptr)
+		*count = 0;
+	if (error)
 	{
-		if ((millis() - m_commandSentTime) > TIME_OUT)
+		serial->println("receive error");
+		error = false;
+		pos = 0;
+		return -1;
+	}
+	if (count != nullptr)
+		*count = pos;
+	for (int i = 0; i < pos; i++)
+	{
+		int val = buffer[i].value;
+		if (buffer[i].mode != 1)
 		{
-			return -1;
+			/*if (data != nullptr)
+				*(data)[i] = val;*/
+			sum += val;
 		}
-	}*/
-
-	read(&input_buffer[*count], &mode);
-
-	//while (available() && !mode /*&& *count < DATA_MAX*/)
-	//{
-	//	if (read(&input_buffer[*count], &mode))
-	//	{
-	//		sum += input_buffer[*count];
-	//		(*count)++;
-	//		if (((*count) == 1) && mode == 1)
-	//		{
-	//			//just for testing
-	//			return ACK;
-	//		}
-	//	}
-	//}
-
-	//TODO: check if checksum is correct
-	return ACK;
+		else
+		{
+			if (pos == 1) //we got an ACK
+			{
+				serial->println("got ACK");
+				pos = 0;
+				return ACK;
+			}
+			else //checksum of data
+			{
+				if (sum != val)
+				{
+					serial->println("wrong checksum");
+					pos = 0;
+					return -1;
+				}
+			}
+		}
+	}
+	pos = 0;
+	return 1;
 }
 
 void MDBSerial::init()
@@ -212,65 +227,4 @@ void MDBSerial::write(int cmd, int mode)
 		UCSR1B &= ~(1 << TXB8);
 	UDR1 = cmd;
 	m_commandSentTime = millis();
-}
-
-int MDBSerial::read(volatile int *data, int *mode)
-{
-	unsigned char status, resh, resl;
-	int count = 0;
-
-	/*status = *m_UCSRnA;
-
-	if (status & (1 << FE))
-	{
-		serial->println("NO STOP BIT");
-		return 0;
-	}
-	else if (status & (1 << DOR))
-	{
-		serial->println("BUFFER FULL");
-		return 0;
-	}
-	else if (status & (1 << UPE))
-	{
-		serial->println("INVALID PARITY");
-		return 0;
-	}*/
-
-	//pos = 0;
-	//int modes[32];
-	//for (int i = 0; i < 32; i++)
-	//{
-	//	modes[pos] = (*m_UCSRnB >> 1) & 0x01;
-	//	data[pos++] = *m_UDRn;
-	//	/*if (modes[pos])
-	//		break;*/
-	//	//delay(1);
-	//	delayMicroseconds(200);
-	//}
-	////serial->println(pos);
-
-	//serial->println(pos);
-
-	for (int i = 0; i < pos; i++)
-	{
-		serial->println(input_buffer[i]);
-		//serial->println(modes[i]);
-	}
-	pos = 0;
-
-	serial->println("######################");
-	/*resh = *m_UCSRnB;
-	resl = *m_UDRn;
-
-	*mode = (resh >> 1) & 0x01;
-	*data = resl;*/
-	
-	return 1;
-}
-
-bool MDBSerial::available()
-{
-	//return (*m_UCSRnA & (1 << RXC));
-	return (UCSR1A & (1 << RXC));
 }

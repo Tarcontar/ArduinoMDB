@@ -21,14 +21,12 @@ public:
 	void Enable();
 	int Poll();
 	void Dispense(int coin, int count);
-	void setup();
-	void status();
 
 private:
 	HardwareSerial *serial;
 
-	//void setup();
-	//void status();
+	void setup();
+	void status();
 	void type();
 	void expansion();
 

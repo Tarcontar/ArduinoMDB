@@ -17,7 +17,7 @@ void CoinChanger::SetSerial(HardwareSerial &print)
 void CoinChanger::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
-	if ((m_mdb->GetResponse(&m_count) == ACK) && (m_count == 1))
+	if ((m_mdb->GetResponse() == ACK))
 	{
 		Poll();
 		setup();
@@ -46,9 +46,9 @@ int CoinChanger::Poll()
 	//serial->print("POLL: ");
 	m_mdb->SendCommand(ADDRESS, POLL);
 	int *result;
-	int answer = m_mdb->GetResponse(&m_count, &result);
+	int answer = m_mdb->GetResponse(&result, &m_count);
 
-	if (answer == ACK && m_count == 1)
+	if (answer == ACK)
 	{
 		//serial->println("ACK");
 		m_mdb->Ack();
@@ -161,7 +161,7 @@ void CoinChanger::Dispense(int coin, int count)
 {
 	int out = (count << 4) | coin;
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
-	if (m_mdb->GetResponse(&m_count) == ACK)
+	if (m_mdb->GetResponse() == ACK)
 	{
 		return;
 	}
@@ -173,24 +173,28 @@ void CoinChanger::setup()
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	int *result;
-	int answer = m_mdb->GetResponse(&m_count, &result);
+	int answer = m_mdb->GetResponse(&result, &m_count);
 
-	if (answer == ACK && m_count == 1)
+	if (answer == ACK)
 	{
-		//serial->println("ACK");
-		//m_mdb->Ack();
+		m_mdb->Ack();
 		return;
 	}
 
 	if (answer != -1 && m_count == 23)
 	{
-		//m_mdb->Ack();
-		serial->println("setup complete");
-		return;
-	}
-	else 
-	{
-		//m_mdb->Ack();
+		m_mdb->Ack();
+		char feature_level = result[0];
+		int country = result[1] << 8 | result[2];
+		char coin_scaling_factor = result[3];
+		char decimal_places = result[4];
+		int coin_type_routing = result[5] << 8 | result[6];
+		char coin_type_credit[] = new char[16];
+		for (int i = 0; i < 16; i++)
+		{
+			coin_type_credit[i] = result[7 + i];
+		}
+
 		serial->println("setup complete");
 		return;
 	}
@@ -200,30 +204,29 @@ void CoinChanger::setup()
 void CoinChanger::status()
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
-	//serial->print("STATUS: ");
 
 	int *result;
-	int answer = m_mdb->GetResponse(&m_count, &result);
+	int answer = m_mdb->GetResponse(&result, &m_count);
 
-	if (answer == ACK && m_count == 1)
+	if (answer == ACK)
 	{
-		//serial->println("ACK");
 		m_mdb->Ack();
 	}
 
 	if (answer != -1 && m_count == 18)
 	{
-		//serial->println("status complete 1");
+		int tube_full_status = result[0] << 8 | result[1];
+		char tube_status[] = new char[16];
+		for (int i = 0; i < 16; i++)
+		{
+			tube_status[i] = result[2 + i];
+		}
+
+		serial->println("status complete");
 		m_mdb->Ack();
+		return;
 	}
-	else //we only get 3 bytes here
-	{
-		/*serial->println(m_count);
-		for (int i = 0; i < m_count; i++)
-			serial->println(result[i]);*/
-		m_mdb->Ack();
-	}
-	//serial->println("status error");
+	serial->println("status error");
 }
 
 void CoinChanger::type()
@@ -231,7 +234,7 @@ void CoinChanger::type()
 	int out[] = {0xff, 0xff, 0xff, 0xff};
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	//does not always return an ack
-	/*if (m_mdb->GetResponse(&m_count) == ACK)
+	/*if (m_mdb->GetResponse() == ACK)
 	{
 		return;
 	}
