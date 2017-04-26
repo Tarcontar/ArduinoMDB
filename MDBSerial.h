@@ -8,6 +8,7 @@
 #define UDRE 5
 #define RXC 7
 
+//MDB specific stuff
 #define DATA_MAX 36
 
 #define TIME_OUT 5
@@ -20,29 +21,23 @@
 
 #define RESET 0x00
 #define SETUP 0x01
-#define STATUS 0x02
 #define POLL 0x03
 #define TYPE 0x04
 #define EXPANSION 0x07
-
-#include "HardwareSerial.h"
 
 class MDBSerial
 {
 public:
 	MDBSerial(int uart = 0);
 
-	void SetSerial(HardwareSerial &print);
-
 	void Ack();
 	void Nak();
 	void Ret();
 
 	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
-	int GetResponse(int **data = nullptr, int *count = nullptr);
+	int GetResponse(char data[] = 0, int *count = nullptr);
 
 private:
-	HardwareSerial *serial;
 
 	enum MODE {
 		DATA = 0,
@@ -57,14 +52,8 @@ private:
 
 	int m_TXn;
 
-	volatile unsigned char *m_UDRn;
 	volatile unsigned char  m_RXENn;
 	volatile unsigned char  m_TXENn;
-	volatile unsigned char *m_UBRRnH;
-	volatile unsigned char *m_UBRRnL;
-	volatile unsigned char *m_UCSRnA;
-	volatile unsigned char *m_UCSRnB;
-	volatile unsigned char *m_UCSRnC;
 	volatile unsigned char  m_UCSZn0;
 	volatile unsigned char  m_UCSZn1;
 	volatile unsigned char  m_UCSZn2;

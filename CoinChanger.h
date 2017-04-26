@@ -1,38 +1,36 @@
 #pragma once
 
-#include "MDBSerial.h"
-#include "HardwareSerial.h"
+#include "MDBDevice.h"
 
 #define ADDRESS 0x08
-#define JUST_RESET 0x0B
+#define STATUS 0x02
 #define DISPENSE 0x05
 
-#define NO_RESPONSE 2000
-
-
-class CoinChanger
+class CoinChanger : public MDBDevice
 {
 public:
 	CoinChanger(MDBSerial &mdb);
 
-	void SetSerial(HardwareSerial &print);
-
 	void Reset();
-	void Enable();
 	int Poll();
+	void Enable();
 	void Dispense(int coin, int count);
+	void Print();
 
 private:
-	HardwareSerial *serial;
-
 	void setup();
 	void status();
 	void type();
 	void expansion();
 
-	MDBSerial *m_mdb;
-	int m_count;
+
 	float m_credit;
-	int m_scaling_factor;
-	int m_type_values[16];
+
+	char m_coin_scaling_factor;
+	char m_decimal_places;
+	unsigned int m_coin_type_routing;
+	char m_coin_type_credit[16];
+
+	unsigned int m_tube_full_status;
+	char m_tube_status[16];
 };
