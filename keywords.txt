@@ -1,0 +1,35 @@
+###################################
+# Syntax Coloring Map For ArduinoMDB
+###################################
+
+###################################
+# Datatypes (KEYWORD1)
+###################################
+
+MDBSerial	KEYWORD1
+CoinChanger KEYWORD1
+BillValidator KEYWORD1
+
+###################################
+# Methods and Functions (KEYWORD2)
+###################################
+
+Ack KEYWORD2
+Nak KEYWORD2
+Ret KEYWORD2
+
+SendCommand KEYWORD2
+GetResponse KEYWORD2
+
+Reset KEYWORD2
+Poll KEYWORD2
+Print KEYWORD2
+SetSerial KEYWORD2
+Enable KEYWORD2
+Dispense KEYWORD2
+Security KEYWORD2
+
+###################################
+# Constants (LITERAL1)
+###################################
+
