@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MDBSerial.h"
-#include "HardwareSerial.h"
+#include "SoftwareSerial.h"
 
 #define JUST_RESET 0x0B
 #define NO_RESPONSE 2000
@@ -17,11 +17,11 @@ public:
 
 	virtual void Print() = 0;
 
-	inline void SetSerial(HardwareSerial &print) { m_serial = &print; }
+	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
 
 protected:
 	MDBSerial *m_mdb;
-	HardwareSerial *m_serial;
+	SoftwareSerial *m_serial;
 
 	int m_count;
 	char m_buffer[64];

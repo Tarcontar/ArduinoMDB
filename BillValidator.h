@@ -2,11 +2,6 @@
 
 #include "MDBDevice.h"
 
-#define ADDRESS 0x30
-#define SECURITY 0x02
-#define ESCROW 0x05
-#define STACKER 0x06
-
 class BillValidator : public MDBDevice
 {
 public:
@@ -17,12 +12,20 @@ public:
 	void Security();
 	void Print();
 
+	inline float GetCredit() { return m_credit; }
+	inline void ClearCredit() { m_credit = 0.0f; }
+
 private:
 	void setup();
 	void status();
 	void type();
 	void stacker();
 	void expansion();
+
+	int ADDRESS = 0x30;
+	int SECURITY = 0x02;
+	int ESCROW = 0x05;
+	int STACKER = 0x06;
 
 	float m_credit;
 

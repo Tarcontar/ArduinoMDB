@@ -21,6 +21,7 @@ volatile unsigned char *m_UCSRnC;
 
 MDBSerial::MDBSerial(int uart)
 {
+	
 	if (uart == 1)
 	{
 		m_TXn = 18;
@@ -81,7 +82,6 @@ MDBSerial::MDBSerial(int uart)
 		m_UCSZn1 = UCSZ01;
 		m_UCSZn2 = UCSZ02;
 	}
-	
 	//hardReset(); //does not work at the moment
 	init();
 }

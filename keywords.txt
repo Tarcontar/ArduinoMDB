@@ -6,9 +6,9 @@
 # Datatypes (KEYWORD1)
 ###################################
 
-MDBSerial	KEYWORD1
-CoinChanger KEYWORD1
-BillValidator KEYWORD1
+MDBSerial 		KEYWORD1 MDBSerial
+CoinChanger 	KEYWORD1 MDBSerial
+BillValidator 	KEYWORD1 MDBSerial
 
 ###################################
 # Methods and Functions (KEYWORD2)

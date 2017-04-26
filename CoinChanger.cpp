@@ -3,24 +3,25 @@
 
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
-	//Reset();
+
 }
 
 void CoinChanger::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
-	//if ((m_mdb->GetResponse() == ACK))
-	//{
-	//	Poll();
-	//	setup();
-	//	status();
-	//	//Expansion(0x00); //ID
-	//	//Expansion(0x01); //Feature
-	//	//Expansion(0x05); //Status
-	//	serial->println("RESET Completed");
-	//	return;
-	//}
-	//Reset();
+	if ((m_mdb->GetResponse() == ACK))
+	{
+		Poll();
+		setup();
+		status();
+		//Expansion(0x00); //ID
+		//Expansion(0x01); //Feature
+		//Expansion(0x05); //Status
+		m_serial->println("RESET Completed");
+		return;
+	}
+	m_serial->println("RESET FAILED");
+	Reset();
 }
 
 void CoinChanger::Enable()
@@ -137,8 +138,8 @@ int CoinChanger::Poll()
 				//possible credited coin removal
 				m_serial->println("credited coin removal");
 				break;
-				//default:
-				//m_serial->println("default");
+			default:
+				m_serial->println("default");
 				//for (int i = 0; i < m_count; i++)
 				//	serial->println(result[i]);
 			}
