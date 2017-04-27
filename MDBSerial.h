@@ -19,12 +19,6 @@
 #define RET 0xAA
 #define NAK 0xFF
 
-#define RESET 0x00
-#define SETUP 0x01
-#define POLL 0x03
-#define TYPE 0x04
-#define EXPANSION 0x07
-
 class MDBSerial
 {
 public:

@@ -3,6 +3,15 @@
 #include "MDBSerial.h"
 #include "SoftwareSerial.h"
 
+#define RESET 0x00
+#define SETUP 0x01
+#define POLL 0x03
+#define TYPE 0x04
+#define EXPANSION 0x07
+#define IDENTIFICATION 0x00
+#define FEATURE_ENABLE 0x01
+#define PAYOUT 0x02
+
 #define JUST_RESET 0x0B
 #define NO_RESPONSE 2000
 
@@ -28,4 +37,8 @@ protected:
 
 	char m_feature_level;
 	unsigned int m_country;
+
+	unsigned long m_manufacturer_code;
+	char m_serial_number[12];
+	char m_model_number[12];
 };
