@@ -31,8 +31,6 @@ int CoinChanger::Poll()
 	m_mdb->SendCommand(ADDRESS, POLL);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 
-	//status();
-	type();
 
 	if (answer == ACK)
 	{
@@ -135,8 +133,8 @@ int CoinChanger::Poll()
 				//possible credited coin removal
 				m_serial->println("credited coin removal");
 				break;
-			default:
-				m_serial->println("default");
+			//default:
+			//	m_serial->println("default");
 				//for (int i = 0; i < m_count; i++)
 				//	serial->println(result[i]);
 			}
@@ -145,6 +143,12 @@ int CoinChanger::Poll()
 	
 	m_mdb->Ack();
 	return 1;
+}
+
+void CoinChanger::Enable()
+{
+	//status();
+	type();
 }
 
 void CoinChanger::Dispense(float value)
@@ -348,7 +352,7 @@ void CoinChanger::expansion_feature_enable()
 	m_mdb->SendCommand(ADDRESS, EXPANSION + FEATURE_ENABLE, out, 4);
 }
 
-void CoinChanger::expansion_payout(char value)
+void CoinChanger::expansion_payout(int value)
 {
-	m_mdb->SendCommand(ADDRESS, EXPANSION + PAYOUT, value, 1);
+	m_mdb->SendCommand(ADDRESS, EXPANSION + PAYOUT, &value, 1);
 }

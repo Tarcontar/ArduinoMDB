@@ -10,6 +10,7 @@ public:
 
 	void Reset();
 	int Poll();
+	void Enable();
 	void Dispense(float value);
 	void Dispense(int coin, int count);
 	void Print();
@@ -27,7 +28,7 @@ private:
 	void type_new();
 	void expansion_identification();
 	void expansion_feature_enable();
-	void expansion_payout(char value);
+	void expansion_payout(int value);
 
 	int ADDRESS = 0x08;
 	int STATUS = 0x02;
