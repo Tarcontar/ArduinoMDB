@@ -1,15 +1,19 @@
 #include <CoinChanger.h>
 #include <MDBSerial.h>
+#include <SoftwareSerial.h>
 
 MDBSerial mdb(1);
 CoinChanger changer(mdb);
 
+SoftwareSerial serial(0, 1);
+
 void setup()
 {
-  Serial.begin(9600);
-  Serial.println("test");
+  serial.begin(9600);
+  serial.println("test");
+  changer.SetSerial(serial);
   changer.Reset();
-  Serial.println("VMC###############");
+  serial.println("VMC###############");
 }
 
 void loop()
