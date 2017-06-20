@@ -6,25 +6,47 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 
 }
 
-void CoinChanger::Reset()
+float CoinChanger::Update()
+{
+	float change;
+	poll();
+	//status();
+	for (int i = 0; i < 16; i++)
+	{
+		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
+	}
+	type(); // TODO: disable some coins when change is low
+	return change;
+}
+
+bool CoinChanger::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		Poll();
-		setup();
-		status();
+		//poll();
+		//setup();
+		//status();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
 		m_serial->println("RESET Completed");
-		return;
+		return true;
 	}
 	m_serial->println("RESET FAILED");
-	Reset();
+	if (m_resetCount < MAX_RESET)
+	{
+		m_resetCount++;
+		Reset();
+	}
+	else
+	{
+		m_resetCount = 0;
+		return false;
+	}
 }
 
-int CoinChanger::Poll()
+int CoinChanger::poll()
 {
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
@@ -145,12 +167,6 @@ int CoinChanger::Poll()
 	return 1;
 }
 
-void CoinChanger::Enable()
-{
-	//status();
-	type();
-}
-
 void CoinChanger::Dispense(float value)
 {
 	//4.30 -> 430
@@ -197,16 +213,6 @@ void CoinChanger::Dispense(int coin, int count)
 		return;
 	}
 	m_serial->println("DISPENSE FAILED");
-}
-
-void CoinChanger::DisableCoin(int coin)
-{
-	m_acceptedCoins |= (1 << coin);
-}
-
-void CoinChanger::EnableCoin(int coin)
-{
-	m_acceptedCoins ^= (1 << coin);
 }
 
 void CoinChanger::Print()
@@ -269,6 +275,7 @@ void CoinChanger::status()
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)
 		{
+			//number of coins in the tube
 			m_tube_status[i] = m_buffer[2 + i];
 		}
 
@@ -282,18 +289,6 @@ void CoinChanger::status()
 }
 
 void CoinChanger::type()
-{
-	int out[] = {0xff, 0xff, 0xff, 0xff};
-	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
-	//does not always return an ack
-	/*if (m_mdb->GetResponse() == ACK)
-	{
-		return;
-	}
-	m_serial->println("TYPE FAILED");*/
-}
-
-void CoinChanger::type_new()
 {
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
@@ -316,7 +311,8 @@ void CoinChanger::expansion_identification()
 		return;
 	}
 
-	m_manufacturer_code = m_buffer[0] << 16 | m_buffer[1] << 8 | m_buffer[2];
+	// * 1L to overcome 16bit integer error
+	m_manufacturer_code = (m_buffer[0] * 1L) << 16 | m_buffer[1] << 8 | m_buffer[2];
 	for (int i = 0; i < 12; i++)
 	{
 		m_serial_number[i] = m_buffer[3 + i];
@@ -324,7 +320,7 @@ void CoinChanger::expansion_identification()
 	}
 
 	m_software_version = m_buffer[27] << 8 | m_buffer[28];
-	m_optional_features = m_buffer[29] << 24 | m_buffer[30] << 16 | m_buffer[31] << 8 | m_buffer[32];
+	m_optional_features = (m_buffer[29] * 1L) << 24 | (m_buffer[30] * 1L) << 16 | m_buffer[31] << 8 | m_buffer[32];
 
 	if (m_optional_features & 0b1)
 	{

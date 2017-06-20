@@ -15,23 +15,28 @@
 #define JUST_RESET 0x0B
 #define NO_RESPONSE 2000
 
+#define MAX_RESET 5
+
 class MDBDevice
 {
 public:
 	explicit
 	MDBDevice(MDBSerial &mdb) : m_mdb(&mdb){}
 
-	virtual void Reset() = 0;
-	virtual int Poll() = 0;
+	virtual bool Reset() = 0;
 
 	virtual void Print() = 0;
 
 	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
 
 protected:
+	virtual int poll() = 0;
+
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;
 
+	int m_resetCount;
+	
 	int m_count;
 	char m_buffer[64];
 

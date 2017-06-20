@@ -7,8 +7,9 @@ class BillValidator : public MDBDevice
 public:
 	BillValidator(MDBSerial &mdb);
 
-	void Reset();
-	int Poll();
+	void Update(float cc_change);
+
+	bool Reset();
 	void Security();
 	void Print();
 
@@ -16,9 +17,10 @@ public:
 	inline void ClearCredit() { m_credit = 0.0f; }
 
 private:
+	int poll();
 	void setup();
 	void status();
-	void type();
+	void type(int bills[]);
 	void stacker();
 	void expansion();
 

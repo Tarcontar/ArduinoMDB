@@ -6,12 +6,36 @@ BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 	//Reset();
 }
 
-void BillValidator::Reset()
+void BillValidator::Update(float cc_change)
+{
+	poll();
+	//status();
+
+	int bills[] = { 0x00, 0xff, 0xff, 0xff };
+	if (cc_change < 25.0)
+	{
+		//disable 20 bill
+		bills[1] = 0x00;
+	}
+	if (cc_change < 15.0)
+	{
+		//disable 10 bill
+		bills[2] = 0x00;
+	}
+	if (cc_change < 10.0)
+	{
+		//disable 5 bill
+		bills[3] = 0x00;
+	}
+	type(bills);
+}
+
+bool BillValidator::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		Poll();
+		poll();
 		setup();
 		status();
 		//Expansion(0x00); //ID
@@ -19,22 +43,33 @@ void BillValidator::Reset()
 		//Expansion(0x05); //Status
 		//Stacker();
 		//Type();
-		//serial->println("RESET Completed");
-		return;
+		m_serial->println("RESET Completed");
+		return true;
 	}
-	Reset();
+	m_serial->println("RESET failed");
+	if (m_resetCount < MAX_RESET)
+	{
+		m_resetCount++;
+		Reset();
+	}
+	else
+	{
+		m_resetCount = 0;
+		return false;
+	}
 }
 
-int BillValidator::Poll()
+int BillValidator::poll()
 {
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-
+	m_serial->println(m_count);
 	if (answer == ACK)
 	{
 		m_mdb->Ack();
+		m_serial->println("ack");
 		return 1;
 	}
 
@@ -206,8 +241,8 @@ int BillValidator::Poll()
 
 void BillValidator::Security()
 {
-	int out[] = { 0xff, 0xff, 0xff, 0xff };
-	m_mdb->SendCommand(ADDRESS, SECURITY, out, 4);
+	int out[] = { 0xff, 0xff };
+	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
 }
 
 void BillValidator::Print()
@@ -219,7 +254,7 @@ void BillValidator::setup()
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-
+	m_serial->println(m_count);
 	if (answer != -1 && m_count == 23)
 	{
 		m_mdb->Ack();
@@ -248,10 +283,9 @@ void BillValidator::status()
 
 }
 
-void BillValidator::type()
+void BillValidator::type(int bills[])
 {
-	int out[] = { 0xff, 0xff, 0xff, 0xff };
-	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
+	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
 }
 
 void BillValidator::stacker()

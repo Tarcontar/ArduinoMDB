@@ -11,6 +11,7 @@ struct data
 volatile data buffer[100];
 volatile int pos = 0;
 volatile bool error = false;
+volatile int v_uart = 0;
 
 volatile unsigned char *m_UDRn;
 volatile unsigned char *m_UBRRnH;
@@ -19,9 +20,9 @@ volatile unsigned char *m_UCSRnA;
 volatile unsigned char *m_UCSRnB;
 volatile unsigned char *m_UCSRnC;
 
-MDBSerial::MDBSerial(int uart)
+MDBSerial::MDBSerial(int uart) 
 {
-	
+	v_uart = uart;
 	if (uart == 1)
 	{
 		m_TXn = 18;
@@ -88,15 +89,50 @@ MDBSerial::MDBSerial(int uart)
 
 ISR(USART1_RX_vect)
 {
-	char status = *m_UCSRnA;
-
-	if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
+	if (v_uart == 1)
 	{
-		error = true;
+		char status = *m_UCSRnA;
+
+		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
+		{
+			error = true;
+		}
+		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		buffer[pos].value = *m_UDRn;
+		pos++;
 	}
-	buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
-	buffer[pos].value = *m_UDRn;
-	pos++;
+}
+
+ISR(USART2_RX_vect)
+{
+	if (v_uart == 2)
+	{
+		char status = *m_UCSRnA;
+
+		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
+		{
+			error = true;
+		}
+		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		buffer[pos].value = *m_UDRn;
+		pos++;
+	}
+}
+
+ISR(USART3_RX_vect)
+{
+	if (v_uart == 3)
+	{
+		char status = *m_UCSRnA;
+
+		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
+		{
+			error = true;
+		}
+		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		buffer[pos].value = *m_UDRn;
+		pos++;
+	}
 }
 
 void MDBSerial::hardReset()

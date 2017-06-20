@@ -6,22 +6,18 @@ class CoinChanger : public MDBDevice
 {
 public:
 	CoinChanger(MDBSerial &mdb);
-	CoinChanger();
 
-	void Reset();
-	int Poll();
-	void Enable();
+	float Update();
+	bool Reset();
 	void Dispense(float value);
 	void Dispense(int coin, int count);
 	void Print();
-
-	void DisableCoin(int coin);
-	void EnableCoin(int coin);
 
 	inline float GetCredit() { return m_credit; }
 	inline void ClearCredit() { m_credit = 0.0f; }
 
 private:
+	int poll();
 	void setup();
 	void status();
 	void type();
