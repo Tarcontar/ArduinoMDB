@@ -6,9 +6,9 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 
 }
 
-float CoinChanger::Update()
+int CoinChanger::Update()
 {
-	float change;
+	int change;
 	poll();
 	//status();
 	for (int i = 0; i < 16; i++)
@@ -30,10 +30,10 @@ bool CoinChanger::Reset()
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
-		m_serial->println("RESET Completed");
+		m_serial->println("CC: RESET Completed");
 		return true;
 	}
-	m_serial->println("RESET FAILED");
+	m_serial->println("CC: RESET FAILED");
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -42,6 +42,7 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
+		m_serial->println("CC: NOT RESPONDING");
 		return false;
 	}
 }
@@ -81,8 +82,7 @@ int CoinChanger::poll()
 			int coins_in_tube = m_buffer[i + 1];
 			if (routing < 2)
 			{
-				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor) / 100.0f;
-				m_serial->println(m_credit);
+				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor);
 				m_serial->println("coin credited");
 			}
 			//else coin rejected
@@ -167,10 +167,8 @@ int CoinChanger::poll()
 	return 1;
 }
 
-void CoinChanger::Dispense(float value)
+void CoinChanger::Dispense(int value)
 {
-	//4.30 -> 430
-	value *= 100;
 	if (m_alternative_payout_supported)
 	{
 		char val = value / m_coin_scaling_factor;
@@ -188,19 +186,42 @@ void CoinChanger::Dispense(float value)
 		value -= num_20c * 20;
 		int num_10c = value / 10;
 		value -= num_10c * 10;
+		int num_5c = value / 5;
+		value -= num_5c * 5;
 
-		//5 cent currently not supported !!!
+		//5 cent currently not supported so dispense 10c instead
+		if (num_5c > 0)
+		{
+			num_10c++;
+		}
+		
+		//TODO: check if the required amount of coins for each type is available
+		//do this in a loop ?
+		/*
+		if (num_2e > m_tube_status[TUBE_2E])
+		{
+			//test if we can dispense 1e instead
+		}
+		if (num_1e > m_tube_status[TUBE_1E])
+		{
+			
+		}
+		if (num_50c > m_tube_status[TUBE_50c])
+		{
+			
+		}
+		*/
 
-		m_serial->println("num_2e: " + num_2e);
-		m_serial->println("num_1e: " + num_1e);
-		m_serial->println("num_50c: " + num_50c);
-		m_serial->println("num_20c: " + num_20c);
-		m_serial->println("num_10c: " + num_10c);
-		Dispense(0, num_2e);
-		Dispense(0, num_1e);
-		Dispense(0, num_50c);
-		Dispense(0, num_20c);
-		Dispense(0, num_10c);
+		//m_serial->println(num_2e);
+		//m_serial->println(num_1e);
+		//m_serial->println(num_50c);
+		//m_serial->println(num_20c);
+		//m_serial->println(num_10c);
+		Dispense(TUBE_2E, num_2e);
+		Dispense(TUBE_1E, num_1e);
+		Dispense(TUBE_50c, num_50c);
+		Dispense(TUBE_20c, num_20c);
+		Dispense(TUBE_10c, num_10c);
 	}
 }
 
@@ -212,7 +233,7 @@ void CoinChanger::Dispense(int coin, int count)
 	{
 		return;
 	}
-	m_serial->println("DISPENSE FAILED");
+	//m_serial->println("DISPENSE FAILED");
 }
 
 void CoinChanger::Print()
@@ -258,11 +279,11 @@ void CoinChanger::setup()
 
 		}
 
-		m_serial->println("setup complete");
+		m_serial->println("CC: setup complete");
 		return;
 	}
 	delay(50);
-	m_serial->println("setup error");
+	m_serial->println("CC: setup error");
 	setup();
 }
 
@@ -272,6 +293,7 @@ void CoinChanger::status()
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
+		//if bit is set, the tube is full
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)
 		{
@@ -279,11 +301,11 @@ void CoinChanger::status()
 			m_tube_status[i] = m_buffer[2 + i];
 		}
 
-		m_serial->println("status complete");
+		m_serial->println("CC: status complete");
 		m_mdb->Ack();
 		return;
 	}
-	m_serial->println("status error");
+	m_serial->println("CC: status error");
 	delay(50);
 	status();
 }

@@ -6,28 +6,32 @@ BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 	//Reset();
 }
 
-void BillValidator::Update(float cc_change)
+void BillValidator::Update(int cc_change)
 {
 	poll();
-	//status();
+	//stacker();
 
 	int bills[] = { 0x00, 0xff, 0xff, 0xff };
-	if (cc_change < 25.0)
+	if (!m_full)
 	{
-		//disable 20 bill
-		bills[1] = 0x00;
-	}
-	if (cc_change < 15.0)
-	{
-		//disable 10 bill
-		bills[2] = 0x00;
-	}
-	if (cc_change < 10.0)
-	{
-		//disable 5 bill
-		bills[3] = 0x00;
+		if (cc_change < 25)
+		{
+			//disable 20 bill
+			bills[1] ^= 0b00000100;
+		}
+		if (cc_change < 15) 
+		{
+			//disable 10 bill
+			bills[1] ^= 0b00000010;
+		}
+		if (cc_change < 10)
+		{
+			//disable 5 bill
+			bills[1] ^= 0b00000001;
+		}
 	}
 	type(bills);
+	m_serial->println(m_credit);
 }
 
 bool BillValidator::Reset()
@@ -37,16 +41,15 @@ bool BillValidator::Reset()
 	{
 		poll();
 		setup();
-		status();
+		security();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
-		//Stacker();
-		//Type();
-		m_serial->println("RESET Completed");
+		Print();
+		m_serial->println("BV: RESET Completed");
 		return true;
 	}
-	m_serial->println("RESET failed");
+	m_serial->println("BV: RESET failed");
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -55,6 +58,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
+		m_serial->println("BV: NOT RESPONDING");
 		return false;
 	}
 }
@@ -65,16 +69,14 @@ int BillValidator::poll()
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-	m_serial->println(m_count);
 	if (answer == ACK)
 	{
 		m_mdb->Ack();
-		m_serial->println("ack");
 		return 1;
 	}
 
 	//max of 16 bytes as response
-	for (int i = 0; i < 16; i++)
+	for (int i = 0; i < m_count; i++)
 	{
 		//bill status
 		if (m_buffer[i] & 0b10000000)
@@ -82,49 +84,53 @@ int BillValidator::poll()
 			int routing = (m_buffer[i] & 0b01110000) >> 4;
 			int type = m_buffer[i] & 0b00001111;
 
-			if (type == 0)
+			if (routing == 0)
 			{
-				m_credit += (m_bill_type_credit[type] * m_bill_scaling_factor) / 100.0f;
+				m_credit += (m_bill_type_credit[type] * m_bill_scaling_factor);
 				m_serial->println("stacked");
+				m_mdb->Ack();
 			}
-			else if (type == 1)
+			else if (routing == 1)
 			{
 				m_serial->println("escrow position");
+				m_mdb->Ack();
+				escrow(true);
+				poll();
 			}
-			else if (type == 2)
+			else if (routing == 2)
 			{
 				m_serial->println("bill returned");
 			}
-			else if (type == 3)
+			else if (routing == 3)
 			{
 				m_serial->println("bill to recycler");
 			}
-			else if (type == 4)
+			else if (routing == 4)
 			{
 				m_serial->println("disabled bill rejected");
 			}
-			else if (type == 5)
+			else if (routing == 5)
 			{
 				m_serial->println("bill to recycler - manual fill");
 			}
-			else if (type == 6)
+			else if (routing == 6)
 			{
 				m_serial->println("manual dispense");
 			}
-			else
+			else if (routing == 7)
 			{
 				m_serial->println("transferred from recycler to cashbox");
 			}
 		}
 		// number of input attempts while validator is disabled
-		if (m_buffer[i] & 0b01000000)
+		else if (m_buffer[i] & 0b01000000)
 		{
 			int number = m_buffer[i] & 0b00011111;
 			m_serial->println("number of attempts: ");
 			m_serial->println(number);
 		}
 		// bill recycler only
-		if (m_buffer[i] & 0b00100000)
+		else if (m_buffer[i] & 0b00100000)
 		{
 			int val = m_buffer[i] & 0b00011111;
 			switch (val)
@@ -170,6 +176,8 @@ int BillValidator::poll()
 			case 15:
 				m_serial->println("filled key pressed");
 				break;
+			default:
+				m_serial->println("default bill rec");
 			}
 		}
 		//status
@@ -225,21 +233,15 @@ int BillValidator::poll()
 				//possible credited bill removal
 				m_serial->println("possible credited bill removal");
 				break;
-				//default:
-				//m_serial->println("default");
-				//for (int i = 0; i < m_count; i++)
-				//	serial->println(result[i]);
 			}
 		}
 	}
 
 	m_mdb->Ack();
-	//get the additional stacker info
-	stacker();
 	return 1;
 }
 
-void BillValidator::Security()
+void BillValidator::security()
 {
 	int out[] = { 0xff, 0xff };
 	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
@@ -247,27 +249,48 @@ void BillValidator::Security()
 
 void BillValidator::Print()
 {
-
+	m_serial->println("BILL VALIDATOR: ");
+	m_serial->print(" credit: ");
+	m_serial->print(m_credit);
+	m_serial->print("\n full: ");
+	m_serial->print((bool)m_full);
+	m_serial->print("\n bills in stacker: ");
+	m_serial->print(m_bills_in_stacker);
+	m_serial->print("\n feature level: ");
+	m_serial->print((int)m_feature_level);
+	m_serial->print("\n bill scaling factor: ");
+	m_serial->print((int)m_bill_scaling_factor);
+	m_serial->print("\n decimal places: ");
+	m_serial->print((int)m_decimal_places);
+	m_serial->print("\n capacity: ");
+	m_serial->print(m_stacker_capacity);
+	m_serial->print("\n security levels: ");
+	m_serial->print(m_security_levels);
+	
+	m_serial->println("\n###");
 }
 
 void BillValidator::setup()
 {
+	for (int i = 0; i < 64; i++)
+		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	m_serial->println(m_count);
-	if (answer != -1 && m_count == 23)
+	
+	if (answer != -1 && m_count == 27)
 	{
 		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
-		m_bill_scaling_factor = m_buffer[3];
-		m_decimal_places = m_buffer[4];
-		m_stacker_capacity = m_buffer[5] << 8 | m_buffer[6];
-		m_security_levels = m_buffer[7] << 8 | m_buffer[8];
-		m_can_escrow = m_buffer[9];
+		m_bill_scaling_factor = m_buffer[3] << 8 | m_buffer[4];
+		m_decimal_places = m_buffer[5];
+		m_stacker_capacity = m_buffer[6] << 8 | m_buffer[7];
+		m_security_levels = m_buffer[8] << 8 | m_buffer[9];
+		m_can_escrow = m_buffer[10];
 		for (int i = 0; i < 16; i++)
 		{
-			m_bill_type_credit[i] = m_buffer[10 + i];
+			m_bill_type_credit[i] = m_buffer[11 + i];
 		}
 
 		m_serial->println("setup complete");
@@ -278,14 +301,29 @@ void BillValidator::setup()
 	setup();
 }
 
-void BillValidator::status()
-{
-
-}
-
 void BillValidator::type(int bills[])
 {
 	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		type(bills);
+		delay(500);
+		m_serial->println("type");
+	}
+}
+
+void BillValidator::escrow(bool accept)
+{
+	int data = 0;
+	if (accept)
+		data = 1;
+	m_mdb->SendCommand(ADDRESS, ESCROW, &data, 1);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		escrow(accept);
+		delay(500);
+		m_serial->println("escrow");
+	}
 }
 
 void BillValidator::stacker()
@@ -298,11 +336,18 @@ void BillValidator::stacker()
 		{
 			m_full = true;
 		}
+		else
+			m_full = false;
 		m_bills_in_stacker = m_buffer[0] & 0b01111111;
+	}
+	else
+	{
+		delay(50);
+		stacker();
 	}
 }
 
 void BillValidator::expansion()
 {
-
+	
 }

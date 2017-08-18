@@ -7,21 +7,21 @@ class BillValidator : public MDBDevice
 public:
 	BillValidator(MDBSerial &mdb);
 
-	void Update(float cc_change);
+	void Update(int cc_change);
 
 	bool Reset();
-	void Security();
 	void Print();
 
-	inline float GetCredit() { return m_credit; }
-	inline void ClearCredit() { m_credit = 0.0f; }
+	inline int GetCredit() { return m_credit; }
+	inline void ClearCredit() { m_credit = 0; }
 
 private:
 	int poll();
 	void setup();
-	void status();
+	void security();
 	void type(int bills[]);
 	void stacker();
+	void escrow(bool accept);
 	void expansion();
 
 	int ADDRESS = 0x30;
@@ -29,7 +29,7 @@ private:
 	int ESCROW = 0x05;
 	int STACKER = 0x06;
 
-	float m_credit;
+	int m_credit;
 
 	bool m_full = false;
 	int m_bills_in_stacker;
