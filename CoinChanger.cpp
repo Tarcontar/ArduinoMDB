@@ -3,12 +3,11 @@
 
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
-
 }
 
-int CoinChanger::Update()
+unsigned long CoinChanger::Update()
 {
-	int change;
+	unsigned long change;
 	poll();
 	//status();
 	for (int i = 0; i < 16; i++)
@@ -260,7 +259,7 @@ void CoinChanger::setup()
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 
-	if (answer != -1 && m_count == 23)
+	if (answer >= 0 && m_count == 23)
 	{
 		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
@@ -315,11 +314,13 @@ void CoinChanger::type()
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	//does not always return an ack
-	/*if (m_mdb->GetResponse() == ACK)
+	if (m_mdb->GetResponse() == ACK)
 	{
-	return;
+		return;
 	}
-	m_serial->println("TYPE FAILED");*/
+	delay(50);
+	type();
+	m_serial->println("TYPE FAILED");
 }
 
 void CoinChanger::expansion_identification()

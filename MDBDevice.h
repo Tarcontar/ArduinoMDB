@@ -15,7 +15,10 @@
 #define JUST_RESET 0x0B
 #define NO_RESPONSE 2000
 
-#define MAX_RESET 10500
+#define MAX_RESET 10
+
+#define SETUP_TIME 200
+#define RESPONSE_TIME 5
 
 class MDBDevice
 {

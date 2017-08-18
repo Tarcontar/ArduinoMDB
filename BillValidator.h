@@ -7,12 +7,12 @@ class BillValidator : public MDBDevice
 public:
 	BillValidator(MDBSerial &mdb);
 
-	void Update(int cc_change);
+	void Update(unsigned long cc_change);
 
 	bool Reset();
 	void Print();
 
-	inline int GetCredit() { return m_credit; }
+	inline unsigned long GetCredit() { return m_credit; }
 	inline void ClearCredit() { m_credit = 0; }
 
 private:
@@ -29,7 +29,7 @@ private:
 	int ESCROW = 0x05;
 	int STACKER = 0x06;
 
-	int m_credit;
+	unsigned long m_credit;
 
 	bool m_full = false;
 	int m_bills_in_stacker;

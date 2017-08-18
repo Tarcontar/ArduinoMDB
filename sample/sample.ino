@@ -5,7 +5,7 @@
 
 MDBSerial mdb(1);
 CoinChanger changer(mdb);
-BillValidator vali(mdb);
+BillValidator validator(mdb);
 
 SoftwareSerial serial(0, 1);
 
@@ -15,15 +15,15 @@ void setup()
   serial.println("test");
   changer.SetSerial(serial);
   changer.Reset();
-  vali.SetSerial(serial);
-  vali.Reset();
+  validator.SetSerial(serial);
+  validator.Reset();
   serial.println("VMC###############");
 }
 
 void loop()
 {
-  changer.Update();
-  vali.Update(100);
+  unsigned long change = changer.Update();
+  validator.Update(change);
   delay(200);
 }
 

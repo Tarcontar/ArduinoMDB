@@ -13,13 +13,13 @@ class CoinChanger : public MDBDevice
 public:
 	CoinChanger(MDBSerial &mdb);
 
-	int Update();
+	unsigned long Update();
 	bool Reset();
 	void Dispense(int value);
 	void Dispense(int coin, int count);
 	void Print();
 
-	inline int GetCredit() { return m_credit; }
+	inline unsigned long GetCredit() { return m_credit; }
 	inline void ClearCredit() { m_credit = 0; }
 
 private:
@@ -39,7 +39,7 @@ private:
 	int m_acceptedCoins = 0xFFFF; //all coins enabled by default
 	int m_dispenseableCoins = 0xFF;
 
-	int m_credit;
+	unsigned long m_credit;
 
 	char m_coin_scaling_factor;
 	char m_decimal_places;

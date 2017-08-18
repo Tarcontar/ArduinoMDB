@@ -3,43 +3,47 @@
 
 BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 {
-	//Reset();
 }
 
-void BillValidator::Update(int cc_change)
+void BillValidator::Update(unsigned long cc_change)
 {
 	poll();
 	//stacker();
 
-	int bills[] = { 0x00, 0xff, 0xff, 0xff };
+	int bills[] = { 0xff, 0xff, 0xff, 0xff };
+	//also disable if credit is higher than 20 euros
+	/*
+	if (m_credit > 2000)
+		//bills[1] = 0x00;
 	if (!m_full)
 	{
-		if (cc_change < 25)
+		if (cc_change < 2500)
 		{
 			//disable 20 bill
-			bills[1] ^= 0b00000100;
+			//bills[1] ^= 0b00000100;
 		}
-		if (cc_change < 15) 
+		if (cc_change < 1500) 
 		{
 			//disable 10 bill
-			bills[1] ^= 0b00000010;
+			//bills[1] ^= 0b00000010;
 		}
-		if (cc_change < 10)
+		if (cc_change < 1000)
 		{
 			//disable 5 bill
-			bills[1] ^= 0b00000001;
+			//bills[1] ^= 0b00000001;
 		}
 	}
+	*/
 	type(bills);
-	m_serial->println(m_credit);
 }
 
 bool BillValidator::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
+	delay(SETUP_TIME);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		poll();
+		while (poll() != JUST_RESET);
 		setup();
 		security();
 		//Expansion(0x00); //ID
@@ -68,6 +72,7 @@ int BillValidator::poll()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
+	
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer == ACK)
 	{
@@ -88,6 +93,7 @@ int BillValidator::poll()
 			{
 				m_credit += (m_bill_type_credit[type] * m_bill_scaling_factor);
 				m_serial->println("stacked");
+				m_serial->println(m_credit);
 				m_mdb->Ack();
 			}
 			else if (routing == 1)
@@ -96,6 +102,7 @@ int BillValidator::poll()
 				m_mdb->Ack();
 				escrow(true);
 				poll();
+				return 1;
 			}
 			else if (routing == 2)
 			{
@@ -195,7 +202,7 @@ int BillValidator::poll()
 				break;
 			case 3:
 				//validator busy
-				m_serial->println("validator busy");
+				//m_serial->println("validator busy");
 				break;
 			case 4:
 				//ROM Checksum Error
@@ -207,7 +214,7 @@ int BillValidator::poll()
 				break;
 			case 6:
 				//validator was reset
-				m_serial->println("JUST RESET");
+				m_mdb->Ack();
 				return JUST_RESET;
 			case 7:
 				//bill removed
@@ -219,7 +226,7 @@ int BillValidator::poll()
 				break;
 			case 9:
 				//validator disabled
-				m_serial->println("validator disabled");
+				//m_serial->println("validator disabled");
 				break;
 			case 10:
 				//invalid escrow request
@@ -245,6 +252,13 @@ void BillValidator::security()
 {
 	int out[] = { 0xff, 0xff };
 	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
+	if (m_mdb->GetResponse(m_buffer, &m_count) == ACK)
+	{
+		return;
+	}
+	delay(50);
+	//m_serial->println("security failed");
+	security();
 }
 
 void BillValidator::Print()
@@ -276,10 +290,8 @@ void BillValidator::setup()
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-	m_serial->println(m_count);
-	
-	if (answer != -1 && m_count == 27)
-	{
+	if (answer > 0 && m_count == 27)
+	{	
 		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
@@ -292,45 +304,52 @@ void BillValidator::setup()
 		{
 			m_bill_type_credit[i] = m_buffer[11 + i];
 		}
-
-		m_serial->println("setup complete");
 		return;
 	}
+	
 	delay(50);
-	m_serial->println("setup error");
 	setup();
 }
 
 void BillValidator::type(int bills[])
 {
 	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
-	if (m_mdb->GetResponse() != ACK)
+	//does not always return an ack
+	/*
+	if (m_mdb->GetResponse() == ACK)
 	{
-		type(bills);
-		delay(500);
-		m_serial->println("type");
+		return;
 	}
+	delay(50);
+	m_serial->println("type");
+	type(bills);
+	*/
 }
 
 void BillValidator::escrow(bool accept)
 {
-	int data = 0;
+	int data[] = { 0x00 };
 	if (accept)
-		data = 1;
-	m_mdb->SendCommand(ADDRESS, ESCROW, &data, 1);
-	if (m_mdb->GetResponse() != ACK)
+		data[0] = 0x01;
+	m_mdb->SendCommand(ADDRESS, ESCROW, data, 1);
+	// we dont always get an ack
+	/*
+	if (m_mdb->GetResponse() == ACK)
 	{
-		escrow(accept);
-		delay(500);
-		m_serial->println("escrow");
+		return;
 	}
+	m_serial->println("escrow4");
+	//delay(50);
+	m_serial->println("escrow5");
+	escrow(accept);
+	*/
 }
 
 void BillValidator::stacker()
 {
 	m_mdb->SendCommand(ADDRESS, STACKER);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-	if (answer != -1 && m_count == 2)
+	if (answer > 0 && m_count == 2)
 	{
 		if (m_buffer[0] & 0b10000000)
 		{
@@ -339,12 +358,10 @@ void BillValidator::stacker()
 		else
 			m_full = false;
 		m_bills_in_stacker = m_buffer[0] & 0b01111111;
+		return;
 	}
-	else
-	{
-		delay(50);
-		stacker();
-	}
+	delay(50);
+	stacker();
 }
 
 void BillValidator::expansion()

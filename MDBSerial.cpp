@@ -181,10 +181,10 @@ int MDBSerial::GetResponse(char data[], int *count)
 	{
 		error = false;
 		pos = 0;
-		return -10;
+		return -1;
 	}
 	if (pos == 0)
-		return -11;
+		return -2;
 
 	*count = pos - 1;
 	for (int i = 0; i < pos; i++)
@@ -207,7 +207,7 @@ int MDBSerial::GetResponse(char data[], int *count)
 				if (sum != val)
 				{
 					pos = 0;
-					return -2;
+					return -3;
 				}
 			}
 		}
