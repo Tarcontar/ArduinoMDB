@@ -15,7 +15,7 @@ public:
 
 	unsigned long Update();
 	bool Reset();
-	void Dispense(int value);
+	void Dispense(unsigned long value);
 	void Dispense(int coin, int count);
 	void Print();
 

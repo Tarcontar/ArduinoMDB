@@ -40,7 +40,6 @@ void BillValidator::Update(unsigned long cc_change)
 bool BillValidator::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
-	delay(SETUP_TIME);
 	if ((m_mdb->GetResponse() == ACK))
 	{
 		while (poll() != JUST_RESET);

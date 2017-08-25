@@ -23,9 +23,9 @@ bool CoinChanger::Reset()
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		//poll();
-		//setup();
-		//status();
+		poll();
+		setup();
+		status();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
@@ -166,7 +166,7 @@ int CoinChanger::poll()
 	return 1;
 }
 
-void CoinChanger::Dispense(int value)
+void CoinChanger::Dispense(unsigned long value)
 {
 	if (m_alternative_payout_supported)
 	{
@@ -176,15 +176,30 @@ void CoinChanger::Dispense(int value)
 	else
 	{
 		int num_2e = value / 200;
+		if (num_2e > m_tube_status[TUBE_2E])
+			num_2e = m_tube_status[TUBE_2E];
 		value -= num_2e * 200;
+		
 		int num_1e = value / 100;
+		if (num_1e > m_tube_status[TUBE_1E])
+			num_1e = m_tube_status[TUBE_1E];
 		value -= num_1e * 100;
+		
 		int num_50c = value / 50;
+		if (num_50c > m_tube_status[TUBE_50c])
+			num_50c = m_tube_status[TUBE_50c];
 		value -= num_50c * 50;
+		
 		int num_20c = value / 20;
+		if (num_20c > m_tube_status[TUBE_20c])
+			num_20c = m_tube_status[TUBE_20c];
 		value -= num_20c * 20;
+		
 		int num_10c = value / 10;
+		if (num_10c > m_tube_status[TUBE_10c])
+			num_10c = m_tube_status[TUBE_10c];
 		value -= num_10c * 10;
+		
 		int num_5c = value / 5;
 		value -= num_5c * 5;
 
@@ -194,33 +209,14 @@ void CoinChanger::Dispense(int value)
 			num_10c++;
 		}
 		
-		//TODO: check if the required amount of coins for each type is available
-		//do this in a loop ?
-		/*
-		if (num_2e > m_tube_status[TUBE_2E])
-		{
-			//test if we can dispense 1e instead
-		}
-		if (num_1e > m_tube_status[TUBE_1E])
-		{
-			
-		}
-		if (num_50c > m_tube_status[TUBE_50c])
-		{
-			
-		}
-		*/
-
-		//m_serial->println(num_2e);
-		//m_serial->println(num_1e);
-		//m_serial->println(num_50c);
-		//m_serial->println(num_20c);
-		//m_serial->println(num_10c);
 		Dispense(TUBE_2E, num_2e);
 		Dispense(TUBE_1E, num_1e);
 		Dispense(TUBE_50c, num_50c);
 		Dispense(TUBE_20c, num_20c);
 		Dispense(TUBE_10c, num_10c);
+		
+		if (value > 0)
+			Dispense(value);
 	}
 }
 
@@ -228,11 +224,10 @@ void CoinChanger::Dispense(int coin, int count)
 {
 	int out = (count << 4) | coin;
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
-	if (m_mdb->GetResponse() == ACK)
+	if (m_mdb->GetResponse() != ACK)
 	{
-		return;
+		m_serial->println("DISPENSE FAILED");
 	}
-	//m_serial->println("DISPENSE FAILED");
 }
 
 void CoinChanger::Print()
