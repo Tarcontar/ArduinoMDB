@@ -3,6 +3,17 @@
 
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
+	ADDRESS = 0x08;
+	STATUS = 0x02;
+	DISPENSE = 0x05;
+	
+	m_acceptedCoins = 0xFFFF; //all coins enabled by default
+	m_dispenseableCoins = 0xFF;
+	
+	m_alternative_payout_supported = false;
+	m_extended_diagnostic_supported = false;
+	m_manual_fill_and_payout_supported = false;
+	m_file_transport_layer_supported = false;
 }
 
 unsigned long CoinChanger::Update()

@@ -24,14 +24,14 @@ private:
 	void escrow(bool accept);
 	void expansion();
 
-	int ADDRESS = 0x30;
-	int SECURITY = 0x02;
-	int ESCROW = 0x05;
-	int STACKER = 0x06;
+	int ADDRESS;
+	int SECURITY;
+	int ESCROW;
+	int STACKER;
 
 	unsigned long m_credit;
 
-	bool m_full = false;
+	bool m_full;
 	int m_bills_in_stacker;
 
 	char m_bill_scaling_factor;

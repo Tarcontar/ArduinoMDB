@@ -29,7 +29,7 @@ public:
 	void Ret();
 
 	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
-	int GetResponse(char data[] = 0, int *count = nullptr);
+	int GetResponse(char data[] = 0, int *count = 0);
 	
 private:
 

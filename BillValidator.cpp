@@ -3,6 +3,12 @@
 
 BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 {
+	ADDRESS = 0x30;
+	SECURITY = 0x02;
+	ESCROW = 0x05;
+	STACKER = 0x06;
+	
+	m_full = false;
 }
 
 void BillValidator::Update(unsigned long cc_change)

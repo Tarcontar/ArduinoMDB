@@ -32,12 +32,12 @@ private:
 	void expansion_feature_enable();
 	void expansion_payout(int value);
 
-	int ADDRESS = 0x08;
-	int STATUS = 0x02;
-	int DISPENSE = 0x05;
+	int ADDRESS;
+	int STATUS;
+	int DISPENSE;
 	
-	int m_acceptedCoins = 0xFFFF; //all coins enabled by default
-	int m_dispenseableCoins = 0xFF;
+	int m_acceptedCoins;
+	int m_dispenseableCoins;
 
 	unsigned long m_credit;
 
@@ -52,8 +52,8 @@ private:
 	unsigned long m_software_version;
 	unsigned long m_optional_features;
 
-	bool m_alternative_payout_supported = false;
-	bool m_extended_diagnostic_supported = false;
-	bool m_manual_fill_and_payout_supported = false;
-	bool m_file_transport_layer_supported = false;
+	bool m_alternative_payout_supported;
+	bool m_extended_diagnostic_supported;
+	bool m_manual_fill_and_payout_supported;
+	bool m_file_transport_layer_supported;
 };
