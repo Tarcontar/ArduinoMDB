@@ -51,6 +51,7 @@ int CoinChanger::poll()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
+	//wait  19ms for 16 bytes + 16ms (inter time) + 5ms (t response)
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 
 
@@ -136,7 +137,7 @@ int CoinChanger::poll()
 				break;
 			case 9:
 				//coin routing error
-				m_serial->println("coin routing error");
+				//m_serial->println("coin routing error");
 				break;
 			case 10:
 				//changer busy
@@ -235,25 +236,47 @@ void CoinChanger::Print()
 	m_serial->println("## CoinChanger ##");
 	m_serial->print("credit: ");
 	m_serial->println(m_credit);
+	
+	m_serial->print("country: ");
+	m_serial->println(m_country);
 
 	m_serial->print("feature level: ");
 	m_serial->println(m_feature_level);
-
-	/*unsigned int m_country;
-	char m_coin_scaling_factor;
-	char m_decimal_places;
-	unsigned int m_coin_type_routing;
-	char m_coin_type_credit[16];
-
-	unsigned int m_tube_full_status;
-	char m_tube_status[16];*/
+	
+	m_serial->print("coin scaling factor: ");
+	m_serial->println(m_coin_scaling_factor);
+	
+	m_serial->print("decimal places: ");
+	m_serial->println(m_decimal_places);
+	
+	m_serial->print("coin type routing: ");
+	m_serial->println(m_coin_type_routing);
+	
+	m_serial->print("coin type credits: ");
+	for (int i = 0; i < 16; i++)
+	{
+		m_serial->print(m_coin_type_credit[i]);
+		m_serial->print(" ");
+    }
+	m_serial->println();
+	
+	m_serial->print("tube full status: ");
+	m_serial->println(m_tube_full_status);
+	
+	m_serial->print("tube status: ");
+	for (int i = 0; i < 16; i++)
+	{
+		m_serial->print(m_tube_status[i]);
+		m_serial->print(" ");
+    }
+	m_serial->println();
 }
 
 void CoinChanger::setup()
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
+	//wait  27.6ms for 23 bytes + 22ms (inter time) + 5ms (t response)
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-
 	if (answer >= 0 && m_count == 23)
 	{
 		m_mdb->Ack();
@@ -284,6 +307,7 @@ void CoinChanger::setup()
 void CoinChanger::status()
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
+	//wait  21.6ms for 18 bytes + 17ms (inter time) + 5ms (t response)
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
@@ -308,21 +332,19 @@ void CoinChanger::type()
 {
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
-	//does not always return an ack
-	if (m_mdb->GetResponse() == ACK)
-	{
-		return;
-	}
-	delay(50);
-	type();
-	m_serial->println("TYPE FAILED");
+	//does not always return an ack!!
+	m_mdb->GetResponse(); //clear input buffer
+
+	//delay(50);
+	//type();
+	//m_serial->println("TYPE FAILED");
 }
 
 void CoinChanger::expansion_identification()
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION + IDENTIFICATION);
+	//wait  40ms for 33 bytes + 32ms (inter time) + 5ms (t response)
 	m_mdb->GetResponse(m_buffer, &m_count);
-
 	if (m_count != 33)
 	{
 		m_serial->println("expansion identification failed");

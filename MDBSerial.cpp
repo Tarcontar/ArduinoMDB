@@ -185,8 +185,8 @@ int MDBSerial::GetResponse(char data[], int *count)
 	}
 	if (pos == 0)
 		return -2;
-
-	*count = pos - 1;
+ 
+    *count = pos - 1; //do not send checksum
 	for (int i = 0; i < pos; i++)
 	{
 		char val = buffer[i].value;

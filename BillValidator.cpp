@@ -225,7 +225,7 @@ int BillValidator::poll()
 				break;
 			case 9:
 				//validator disabled
-				//m_serial->println("validator disabled");
+				m_serial->println("validator disabled");
 				break;
 			case 10:
 				//invalid escrow request
@@ -313,6 +313,8 @@ void BillValidator::setup()
 void BillValidator::type(int bills[])
 {
 	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
+	
+	m_mdb->GetResponse(); //to clear input buffer
 	//does not always return an ack
 	/*
 	if (m_mdb->GetResponse() == ACK)
