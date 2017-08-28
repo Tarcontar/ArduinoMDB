@@ -21,10 +21,12 @@ unsigned long CoinChanger::Update()
 	unsigned long change;
 	poll();
 	//status();
+
 	for (int i = 0; i < 16; i++)
 	{
 		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 	}
+
 	type(); // TODO: disable some coins when change is low
 	return change;
 }
@@ -32,18 +34,19 @@ unsigned long CoinChanger::Update()
 bool CoinChanger::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
+	delay(10);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		poll();
+		while (poll() != JUST_RESET);
 		setup();
 		status();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
-		m_serial->println("CC: RESET Completed");
+		m_serial->println(F("CC: RESET Completed"));
 		return true;
 	}
-	m_serial->println("CC: RESET FAILED");
+	m_serial->println(F("CC: RESET FAILED"));
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -52,20 +55,20 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
-		m_serial->println("CC: NOT RESPONDING");
+		m_serial->println(F("CC: NOT RESPONDING"));
 		return false;
 	}
 }
 
 int CoinChanger::poll()
 {
+	//m_mdb->GetResponse(m_buffer, &m_count);//
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	//wait  19ms for 16 bytes + 16ms (inter time) + 5ms (t response)
+	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-
-
 	if (answer == ACK)
 	{
 		m_mdb->Ack();
@@ -81,25 +84,22 @@ int CoinChanger::poll()
 			int number = (m_buffer[i] & 0b01110000) >> 4;
 			int type = m_buffer[i] & 0b00001111;
 			int coins_in_tube = m_buffer[i + 1];
-			m_serial->println("dispensed");
 			i++; //cause we used 2 bytes
 		}
 		//coins deposited
 		else if (m_buffer[i] & 0b01000000)
 		{
-			m_serial->println("deposited");
 			int routing = (m_buffer[i] & 0b00110000) >> 4;
 			int type = m_buffer[i] & 0b00001111;
 			int coins_in_tube = m_buffer[i + 1];
 			if (routing < 2)
 			{
 				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor);
-				m_serial->println("coin credited");
 			}
 			//else coin rejected
 			else
 			{
-				m_serial->println("coin rejected");
+				//m_serial->println("coin rejected");
 			}
 			i++; //cause we used 2 bytes
 		}
@@ -107,7 +107,7 @@ int CoinChanger::poll()
 		else if (m_buffer[i] & 0b00100000)
 		{
 			int slug_count = m_buffer[i] & 0b00011111;
-			m_serial->println("slug");
+			//m_serial->println("slug");
 		}
 		//status
 		else
@@ -116,35 +116,35 @@ int CoinChanger::poll()
 			{
 			case 1:
 				//escrow request
-				m_serial->println("escrow request");
+				//m_serial->println("escrow request");
 				break;
 			case 2:
 				//changer payout busy
-				m_serial->println("changer payout busy");
+				//m_serial->println("changer payout busy");
 				break;
 			case 3:
 				//no credit
-				m_serial->println("no credit");
+				//m_serial->println("no credit");
 				break;
 			case 4:
 				//defective tube sensor
-				m_serial->println("defective tube sensor");
+				//m_serial->println("defective tube sensor");
 				break;
 			case 5:
 				//double arrival
-				m_serial->println("double arrival");
+				//m_serial->println("double arrival");
 				break;
 			case 6:
 				//acceptor unplugged
-				m_serial->println("acceptor unplugged");
+				//m_serial->println("acceptor unplugged");
 				break;
 			case 7:
 				//tube jam
-				m_serial->println("tube jam");
+				//m_serial->println("tube jam");
 				break;
 			case 8:
 				//ROM checksum error
-				m_serial->println("ROM checksum error");
+				//m_serial->println("ROM checksum error");
 				break;
 			case 9:
 				//coin routing error
@@ -152,24 +152,25 @@ int CoinChanger::poll()
 				break;
 			case 10:
 				//changer busy
-				m_serial->println("changer busy");
+				//m_serial->println("changer busy");
 				break;
 			case 11:
 				//changer was reset
-				m_serial->println("JUST RESET");
+				//m_serial->println("JUST RESET");
 				return JUST_RESET;
 			case 12:
 				//coin jam
-				m_serial->println("coin jam");
+				//m_serial->println("coin jam");
 				break;
 			case 13:
 				//possible credited coin removal
-				m_serial->println("credited coin removal");
+				//m_serial->println("credited coin removal");
 				break;
 			//default:
 			//	m_serial->println("default");
 				//for (int i = 0; i < m_count; i++)
 				//	serial->println(result[i]);
+			
 			}
 		}
 	}
@@ -236,14 +237,16 @@ void CoinChanger::Dispense(int coin, int count)
 {
 	int out = (count << 4) | coin;
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
+	delay(10);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_serial->println("DISPENSE FAILED");
+		m_serial->println(F("DISPENSE FAILED"));
 	}
 }
 
 void CoinChanger::Print()
 {
+	/*
 	m_serial->println("## CoinChanger ##");
 	m_serial->print("credit: ");
 	m_serial->println(m_credit);
@@ -281,12 +284,14 @@ void CoinChanger::Print()
 		m_serial->print(" ");
     }
 	m_serial->println();
+	*/
 }
 
 void CoinChanger::setup()
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	//wait  27.6ms for 23 bytes + 22ms (inter time) + 5ms (t response)
+	delay(55);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer >= 0 && m_count == 23)
 	{
@@ -307,11 +312,11 @@ void CoinChanger::setup()
 
 		}
 
-		m_serial->println("CC: setup complete");
+		//m_serial->println(F("CC: setup complete"));
 		return;
 	}
 	delay(50);
-	m_serial->println("CC: setup error");
+	m_serial->println(F("CC: setup error"));
 	setup();
 }
 
@@ -319,6 +324,7 @@ void CoinChanger::status()
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
 	//wait  21.6ms for 18 bytes + 17ms (inter time) + 5ms (t response)
+	delay(55);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
@@ -330,11 +336,11 @@ void CoinChanger::status()
 			m_tube_status[i] = m_buffer[2 + i];
 		}
 
-		m_serial->println("CC: status complete");
+		//m_serial->println(F("CC: status complete"));
 		m_mdb->Ack();
 		return;
 	}
-	m_serial->println("CC: status error");
+	m_serial->println(F("CC: status error"));
 	delay(50);
 	status();
 }
@@ -344,7 +350,7 @@ void CoinChanger::type()
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	//does not always return an ack!!
-	m_mdb->GetResponse(); //clear input buffer
+	//m_mdb->GetResponse(); //clear input buffer
 
 	//delay(50);
 	//type();
@@ -358,7 +364,7 @@ void CoinChanger::expansion_identification()
 	m_mdb->GetResponse(m_buffer, &m_count);
 	if (m_count != 33)
 	{
-		m_serial->println("expansion identification failed");
+		//m_serial->println("expansion identification failed");
 		return;
 	}
 
