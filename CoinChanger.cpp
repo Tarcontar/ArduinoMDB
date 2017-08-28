@@ -69,9 +69,9 @@ int CoinChanger::poll()
 	//wait  19ms for 16 bytes + 16ms (inter time) + 5ms (t response)
 	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
+	m_mdb->Ack();
 	if (answer == ACK)
 	{
-		m_mdb->Ack();
 		return 1;
 	}
 
@@ -174,8 +174,6 @@ int CoinChanger::poll()
 			}
 		}
 	}
-	
-	m_mdb->Ack();
 	return 1;
 }
 
@@ -328,6 +326,7 @@ void CoinChanger::status()
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
+		mdb->Ack();
 		//if bit is set, the tube is full
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)
@@ -337,7 +336,6 @@ void CoinChanger::status()
 		}
 
 		//m_serial->println(F("CC: status complete"));
-		m_mdb->Ack();
 		return;
 	}
 	m_serial->println(F("CC: status error"));
@@ -349,8 +347,8 @@ void CoinChanger::type()
 {
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
-	//does not always return an ack!!
-	//m_mdb->GetResponse(); //clear input buffer
+	delay(10);
+	m_mdb->GetResponse(); //clear input buffer
 
 	//delay(50);
 	//type();
