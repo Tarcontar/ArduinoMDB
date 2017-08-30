@@ -176,8 +176,8 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 
 int MDBSerial::GetResponse(char data[], int *count)
 {
-	pos = 0; //test this
 	char sum = 0;
+	*count = 0;
 	if (error)
 	{
 		error = false;

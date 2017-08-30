@@ -10,6 +10,20 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_acceptedCoins = 0xFFFF; //all coins enabled by default
 	m_dispenseableCoins = 0xFF;
 	
+	m_credit = 0;
+	m_coin_scaling_factor = 0;
+	m_decimal_places = 0;
+	m_coin_type_routing = 0;
+	for (int i = 0; i < 16; i++)
+	{
+		m_coin_type_credit[i] = 0;
+		m_tube_status[i] = 0;
+	}
+	m_tube_full_status = 0;
+	
+	m_software_version = 0;
+	m_optional_features = 0;
+	
 	m_alternative_payout_supported = false;
 	m_extended_diagnostic_supported = false;
 	m_manual_fill_and_payout_supported = false;
@@ -62,10 +76,13 @@ bool CoinChanger::Reset()
 
 int CoinChanger::poll()
 {
+	bool reset = false;
 	//m_mdb->GetResponse(m_buffer, &m_count);//
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
+	delay(5);
+	m_mdb->Ack();
 	//wait  19ms for 16 bytes + 16ms (inter time) + 5ms (t response)
 	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
@@ -76,7 +93,7 @@ int CoinChanger::poll()
 	}
 
 	//max of 16 bytes as response
-	for (int i = 0; i < 16; i++)
+	for (int i = 0; i < m_count && i < 16; i++)
 	{
 		//coins dispensed manually
 		if (m_buffer[i] & 0b10000000)
@@ -157,7 +174,8 @@ int CoinChanger::poll()
 			case 11:
 				//changer was reset
 				//m_serial->println("JUST RESET");
-				return JUST_RESET;
+				reset = true;
+				break;
 			case 12:
 				//coin jam
 				//m_serial->println("coin jam");
@@ -174,6 +192,8 @@ int CoinChanger::poll()
 			}
 		}
 	}
+	if (reset)
+		return JUST_RESET;
 	return 1;
 }
 
@@ -326,7 +346,7 @@ void CoinChanger::status()
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
-		mdb->Ack();
+		m_mdb->Ack();
 		//if bit is set, the tube is full
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)

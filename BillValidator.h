@@ -33,6 +33,8 @@ private:
 
 	bool m_full;
 	int m_bills_in_stacker;
+	
+	bool m_bill_in_escrow;
 
 	char m_bill_scaling_factor;
 	char m_decimal_places;
