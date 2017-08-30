@@ -39,9 +39,9 @@ bool BillValidator::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
 	delay(10);
-	if ((m_mdb->GetResponse() == ACK))
+	if (m_mdb->GetResponse() == ACK)
 	{
-		while (poll() != JUST_RESET);
+		while (poll() != JUST_RESET); //is possible deadloop
 		setup();
 		security();
 		//Expansion(0x00); //ID
@@ -75,7 +75,6 @@ int BillValidator::poll()
 	m_mdb->Ack();
 	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-	//m_mdb->Ack();
 	if (answer == ACK)
 	{
 		return 1;
@@ -93,13 +92,13 @@ int BillValidator::poll()
 			if (routing == 0)
 			{
 				m_credit += (m_bill_type_credit[type] * m_bill_scaling_factor);
-				m_serial->println("credited");
 			}
 			else if (routing == 1)
 			{
-				m_serial->println("escrow position");
-				//m_bill_in_escrow = true;
+				//m_serial->println("escrow position");
+				m_bill_in_escrow = true;
 			}
+			/*
 			else if (routing == 2)
 			{
 				m_serial->println("bill returned");
@@ -124,14 +123,14 @@ int BillValidator::poll()
 			{
 				m_serial->println("transferred from recycler to cashbox");
 			}
-			else
-				m_serial->println("routing error");
+			*/
+			/*else
+				m_serial->println("routing error");*/
 		}
 		// number of input attempts while validator is disabled
 		else if (m_buffer[i] & 0b01000000)
 		{
 			int number = m_buffer[i] & 0b00011111;
-			m_serial->println("test");
 		}
 		// bill recycler only
 		else if (m_buffer[i] & 0b00100000)
@@ -140,44 +139,46 @@ int BillValidator::poll()
 			switch (val)
 			{
 			case 1:
-				m_serial->println("escrow request");
+				//m_serial->println("escrow request");
 				break;
 			case 2:
-				m_serial->println("payout busy");
+				//m_serial->println("payout busy");
 				break;
 			case 3:
-				m_serial->println("dispenser busy");
+				//m_serial->println("dispenser busy");
 				break;
 			case 4:
-				m_serial->println("defective dispenser sensor");
+				//m_serial->println("defective dispenser sensor");
 				break;
 			case 5:
-				m_serial->println("not used");
+				//m_serial->println("not used");
 				break;
 			case 6:
-				m_serial->println("dispenser did not start / motor problem");
+				//m_serial->println("dispenser did not start / motor problem");
 				break;
 			case 7:
-				m_serial->println("dispenser jam");
+				//m_serial->println("dispenser jam");
 				break;
 			case 8:
-				m_serial->println("ROM checksum error");
+				//m_serial->println("ROM checksum error");
 				break;
 			case 9:
-				m_serial->println("dispenser disabled");
+				//m_serial->println("dispenser disabled");
 				break;
 			case 10:
-				m_serial->println("bill waiting");
+				//m_serial->println("bill waiting");
 				break;
 			case 11: //unused
 			case 12: //unused
 			case 13: //unused
 			case 14: //unused
 			case 15:
-				m_serial->println("filled key pressed");
+				//m_serial->println("filled key pressed");
 				break;
+			/*
 			default:
 				m_serial->println("default bill rec");
+			*/
 			}
 		}
 		//status
@@ -187,23 +188,23 @@ int BillValidator::poll()
 			{
 			case 1:
 				//defective motor
-				m_serial->println("defective motor");
+				//m_serial->println("defective motor");
 				break;
 			case 2:
 				//sensor problem
-				m_serial->println("sensor problem");
+				//m_serial->println("sensor problem");
 				break;
 			case 3:
 				//validator busy
-				m_serial->println(F("validator busy"));
+				//m_serial->println(F("validator busy"));
 				break;
 			case 4:
 				//ROM Checksum Error
-				m_serial->println("ROM Checksum error");
+				//m_serial->println("ROM Checksum error");
 				break;
 			case 5:
 				//Validator jammed
-				m_serial->println("validator jammed");
+				//m_serial->println("validator jammed");
 				break;
 			case 6:
 				//validator was reset
@@ -212,11 +213,11 @@ int BillValidator::poll()
 				break;
 			case 7:
 				//bill removed
-				m_serial->println("bill removed");
+				//m_serial->println("bill removed");
 				break;
 			case 8:
 				//cash box out of position
-				m_serial->println("cash box out of position");
+				//m_serial->println("cash box out of position");
 				break;
 			case 9:
 				//validator disabled
@@ -224,18 +225,18 @@ int BillValidator::poll()
 				break;
 			case 10:
 				//invalid escrow request
-				m_serial->println("invalid escrow request");
+				//m_serial->println("invalid escrow request");
 				break;
 			case 11:
 				//bill rejected
-				m_serial->println("bill rejected");
+				//m_serial->println("bill rejected");
 				break;
 			case 12:
 				//possible credited bill removal
-				m_serial->println("possible credited bill removal");
+				//m_serial->println("possible credited bill removal");
 				break;
-			default:
-				m_serial->println("default");
+			/*default:
+				m_serial->println("default");*/
 			}
 		}
 	}
@@ -249,13 +250,12 @@ void BillValidator::security()
 	int out[] = { 0xff, 0xff };
 	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
 	delay(10);
-	if (m_mdb->GetResponse(m_buffer, &m_count) == ACK)
+	if (m_mdb->GetResponse() != ACK)
 	{
-		return;
+		delay(50);
+		m_serial->println(F("BV: security failed"));
+		security();
 	}
-	delay(50);
-	//m_serial->println("security failed");
-	security();
 }
 
 void BillValidator::Print()
@@ -288,11 +288,12 @@ void BillValidator::setup()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
+	delay(5);
+	m_mdb->Ack();
 	delay(60);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer > 0 && m_count == 27)
 	{	
-		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
 		m_bill_scaling_factor = m_buffer[3] << 8 | m_buffer[4];
@@ -319,7 +320,7 @@ void BillValidator::type(int bills[])
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(F("type error"));
+		m_serial->println(F("BV: type error"));
 		type(bills);
 	}
 }
@@ -331,25 +332,25 @@ void BillValidator::escrow(bool accept)
 		data[0] = 0x01;
 	m_mdb->SendCommand(ADDRESS, ESCROW, data, 1);
 	delay(10);
-	if (m_mdb->GetResponse() == ACK)
+	if (m_mdb->GetResponse() != ACK)
 	{
-		m_bill_in_escrow = false;
-		return;
+		m_serial->println(F("BV: escrow error"));
+		delay(50);
+		escrow(accept);
 	}
-	m_serial->println(F("escrow error"));
-	delay(50);
-	escrow(accept);
+	m_bill_in_escrow = false;
 }
 
 void BillValidator::stacker()
 {
 	m_mdb->SendCommand(ADDRESS, STACKER);
+	delay(5);
+	m_mdb->Ack();
 	//wait  3 ms for 2 bytes + 1ms (inter time) + 5ms (t response)
 	delay(15);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer > 0 && m_count == 2)
 	{
-		m_mdb->Ack();
 		if (m_buffer[0] & 0b10000000)
 		{
 			m_full = true;
@@ -360,7 +361,7 @@ void BillValidator::stacker()
 		//m_serial->println(F("stacker ready"));
 		return;
 	}
-	//m_serial->println(F("stacker error"));
+	m_serial->println(F("BV: stacker error"));
 	delay(50);
 	stacker();
 }

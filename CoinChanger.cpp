@@ -14,6 +14,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_coin_scaling_factor = 0;
 	m_decimal_places = 0;
 	m_coin_type_routing = 0;
+	
 	for (int i = 0; i < 16; i++)
 	{
 		m_coin_type_credit[i] = 0;
@@ -34,7 +35,7 @@ unsigned long CoinChanger::Update()
 {
 	unsigned long change;
 	poll();
-	//status();
+	status();
 
 	for (int i = 0; i < 16; i++)
 	{
@@ -51,12 +52,9 @@ bool CoinChanger::Reset()
 	delay(10);
 	if ((m_mdb->GetResponse() == ACK))
 	{
-		while (poll() != JUST_RESET);
+		while (poll() != JUST_RESET); //possible deadloop
 		setup();
 		status();
-		//Expansion(0x00); //ID
-		//Expansion(0x01); //Feature
-		//Expansion(0x05); //Status
 		m_serial->println(F("CC: RESET Completed"));
 		return true;
 	}
@@ -77,7 +75,6 @@ bool CoinChanger::Reset()
 int CoinChanger::poll()
 {
 	bool reset = false;
-	//m_mdb->GetResponse(m_buffer, &m_count);//
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
@@ -86,7 +83,6 @@ int CoinChanger::poll()
 	//wait  19ms for 16 bytes + 16ms (inter time) + 5ms (t response)
 	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
-	m_mdb->Ack();
 	if (answer == ACK)
 	{
 		return 1;
@@ -308,12 +304,13 @@ void CoinChanger::Print()
 void CoinChanger::setup()
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
+	delay(5);
+	m_mdb->Ack();
 	//wait  27.6ms for 23 bytes + 22ms (inter time) + 5ms (t response)
 	delay(55);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer >= 0 && m_count == 23)
 	{
-		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
 		m_coin_scaling_factor = m_buffer[3];
@@ -327,7 +324,9 @@ void CoinChanger::setup()
 		//test for expansion support
 		if (m_feature_level >= 3)
 		{
-
+			//expansion_identification();
+			//expansion_feature_enable();
+			//Expansion(0x05); //Status //where is this from?
 		}
 
 		//m_serial->println(F("CC: setup complete"));
@@ -341,12 +340,13 @@ void CoinChanger::setup()
 void CoinChanger::status()
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
+	delay(5);
+	m_mdb->Ack();
 	//wait  21.6ms for 18 bytes + 17ms (inter time) + 5ms (t response)
 	delay(55);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
 	if (answer != -1 && m_count == 18)
 	{
-		m_mdb->Ack();
 		//if bit is set, the tube is full
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)
@@ -368,52 +368,59 @@ void CoinChanger::type()
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	delay(10);
-	m_mdb->GetResponse(); //clear input buffer
-
-	//delay(50);
-	//type();
-	//m_serial->println("TYPE FAILED");
+	if (m_mdb->GetResponse() != ACK)
+	{
+		delay(50);
+		m_serial->println(F("CC: type failed"));
+		type();
+	}
 }
 
 void CoinChanger::expansion_identification()
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION + IDENTIFICATION);
+	delay(5);
+	m_mdb->Ack();
 	//wait  40ms for 33 bytes + 32ms (inter time) + 5ms (t response)
-	m_mdb->GetResponse(m_buffer, &m_count);
-	if (m_count != 33)
+	delay(80);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count);
+	m_serial->println(answer);
+	if (answer > 0 && m_count == 33)
 	{
-		//m_serial->println("expansion identification failed");
+		// * 1L to overcome 16bit integer error
+		m_manufacturer_code = (m_buffer[0] * 1L) << 16 | m_buffer[1] << 8 | m_buffer[2];
+		for (int i = 0; i < 12; i++)
+		{
+			m_serial_number[i] = m_buffer[3 + i];
+			m_model_number[i] = m_buffer[15 + i];
+		}
+
+		m_software_version = m_buffer[27] << 8 | m_buffer[28];
+		m_optional_features = (m_buffer[29] * 1L) << 24 | (m_buffer[30] * 1L) << 16 | m_buffer[31] << 8 | m_buffer[32];
+
+		if (m_optional_features & 0b1)
+		{
+			m_alternative_payout_supported = true;
+			m_serial->println("alternative payout");
+		}
+		if (m_optional_features & 0b10)
+		{
+			m_extended_diagnostic_supported = true;
+		}
+		if (m_optional_features & 0b100)
+		{
+			m_manual_fill_and_payout_supported = true;
+		}
+		if (m_optional_features & 0b1000)
+		{ 
+			m_file_transport_layer_supported = true;
+		}
+		expansion_feature_enable();
 		return;
 	}
-
-	// * 1L to overcome 16bit integer error
-	m_manufacturer_code = (m_buffer[0] * 1L) << 16 | m_buffer[1] << 8 | m_buffer[2];
-	for (int i = 0; i < 12; i++)
-	{
-		m_serial_number[i] = m_buffer[3 + i];
-		m_model_number[i] = m_buffer[15 + i];
-	}
-
-	m_software_version = m_buffer[27] << 8 | m_buffer[28];
-	m_optional_features = (m_buffer[29] * 1L) << 24 | (m_buffer[30] * 1L) << 16 | m_buffer[31] << 8 | m_buffer[32];
-
-	if (m_optional_features & 0b1)
-	{
-		m_alternative_payout_supported = true;
-	}
-	if (m_optional_features & 0b10)
-	{
-		m_extended_diagnostic_supported = true;
-	}
-	if (m_optional_features & 0b100)
-	{
-		m_manual_fill_and_payout_supported = true;
-	}
-	if (m_optional_features & 0b1000)
-	{ 
-		m_file_transport_layer_supported = true;
-	}
-	expansion_feature_enable();
+	m_serial->println(m_count);
+	expansion_identification();
+	m_serial->println("expansion identification failed");
 }
 
 void CoinChanger::expansion_feature_enable()

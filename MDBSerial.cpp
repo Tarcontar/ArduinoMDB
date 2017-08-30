@@ -164,6 +164,7 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 {
 	char sum = 0;
 	write(address | cmd, ADDRESS);
+	
 	sum += address | cmd;
 
 	for (unsigned int i = 0; i < dataCount; i++)
