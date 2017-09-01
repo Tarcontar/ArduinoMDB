@@ -29,11 +29,11 @@ public:
 	virtual bool Reset() = 0;
 
 	virtual void Print() = 0;
-
+	
 	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
 
 protected:
-	virtual int poll() = 0;
+	virtual long poll() = 0;
 
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;

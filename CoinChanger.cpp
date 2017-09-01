@@ -31,19 +31,19 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_file_transport_layer_supported = false;
 }
 
-unsigned long CoinChanger::Update()
+long CoinChanger::Update(unsigned long &change)
 {
-	unsigned long change;
 	poll();
 	status();
+	change = 0;
 
 	for (int i = 0; i < 16; i++)
 	{
 		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 	}
-
+	
 	type(); // TODO: disable some coins when change is low
-	return change;
+	return 1; //TODO: return -1 etc if there is a problem
 }
 
 bool CoinChanger::Reset()
@@ -72,8 +72,9 @@ bool CoinChanger::Reset()
 	}
 }
 
-int CoinChanger::poll()
+long CoinChanger::poll()
 {
+	long error_code = 0;
 	bool reset = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
@@ -190,6 +191,10 @@ int CoinChanger::poll()
 	}
 	if (reset)
 		return JUST_RESET;
+	if (error_code > 0)
+	{
+		return error_code;
+	}
 	return 1;
 }
 

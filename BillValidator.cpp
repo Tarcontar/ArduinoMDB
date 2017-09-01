@@ -20,19 +20,28 @@ BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 		m_bill_type_credit[i] = 0;
 }
 
-void BillValidator::Update(unsigned long cc_change)
+long BillValidator::Update(unsigned long cc_change)
 {
-	poll();
+	long error = poll();
 	stacker();
+
+	int b = 0;
+
+	if (cc_change > 2500) //more than 25€
+		bitSet(b, 2); //enable 20€ bill
+	if (cc_change > 1500) //more than 15€
+		bitSet(b, 1); //enable 10€ bill
+	if (cc_change > 500) //more than 5€
+		bitSet(b, 0); //enable 5€ bill
 	
-	int bills[] = { 0xff, 0xff, 0x00, 0x00 };
-	
+	int bills[] = { 0x00, b, 0x00, 0x00 };
 	if (m_bill_in_escrow)
 	{
 		escrow(true);
 	}
 	else
 		type(bills);
+	return 1;
 }
 
 bool BillValidator::Reset()
@@ -65,8 +74,10 @@ bool BillValidator::Reset()
 	}
 }
 
-int BillValidator::poll()
+long BillValidator::poll()
 {
+    long error_code = 0;
+	
 	bool reset = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
@@ -149,6 +160,7 @@ int BillValidator::poll()
 				break;
 			case 4:
 				//m_serial->println("defective dispenser sensor");
+				bitSet(error_code, 0);
 				break;
 			case 5:
 				//m_serial->println("not used");
@@ -188,11 +200,13 @@ int BillValidator::poll()
 			{
 			case 1:
 				//defective motor
-				//m_serial->println("defective motor");
+				//m_serial->println(F("defective motor"));
+				bitSet(error_code, 1);
 				break;
 			case 2:
 				//sensor problem
-				//m_serial->println("sensor problem");
+				//m_serial->println(F"sensor problem"));
+				bitSet(error_code, 2);
 				break;
 			case 3:
 				//validator busy
@@ -205,6 +219,7 @@ int BillValidator::poll()
 			case 5:
 				//Validator jammed
 				//m_serial->println("validator jammed");
+				bitSet(error_code, 3);
 				break;
 			case 6:
 				//validator was reset
@@ -218,6 +233,7 @@ int BillValidator::poll()
 			case 8:
 				//cash box out of position
 				//m_serial->println("cash box out of position");
+				bitSet(error_code, 4);
 				break;
 			case 9:
 				//validator disabled
@@ -242,6 +258,11 @@ int BillValidator::poll()
 	}
 	if (reset)
 		return JUST_RESET;
+	if (error_code > 0)
+	{
+		bitSet(error_code, 31);
+		return error_code;
+	}
 	return 1;
 }
 
