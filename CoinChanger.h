@@ -7,6 +7,7 @@
 #define TUBE_50c 3
 #define TUBE_20c 2
 #define TUBE_10c 1
+#define TUBE_5c  0
 
 class CoinChanger : public MDBDevice
 {

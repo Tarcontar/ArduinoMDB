@@ -31,7 +31,8 @@ long BillValidator::Update(unsigned long cc_change)
 		bitSet(b, 2); //enable 20€ bill
 	if (cc_change > 1500) //more than 15€
 		bitSet(b, 1); //enable 10€ bill
-	if (cc_change > 500) //more than 5€
+	//if (cc_change > 500) //more than 5€
+	if (true)
 		bitSet(b, 0); //enable 5€ bill
 	
 	int bills[] = { 0x00, b, 0x00, 0x00 };

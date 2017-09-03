@@ -8,7 +8,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	DISPENSE = 0x05;
 	
 	m_acceptedCoins = 0xFFFF; //all coins enabled by default
-	m_dispenseableCoins = 0xFF;
+	m_dispenseableCoins = 0xFFFF;
 	
 	m_credit = 0;
 	m_coin_scaling_factor = 0;
@@ -56,6 +56,7 @@ bool CoinChanger::Reset()
 		setup();
 		status();
 		m_serial->println(F("CC: RESET Completed"));
+
 		return true;
 	}
 	m_serial->println(F("CC: RESET FAILED"));
@@ -113,7 +114,7 @@ long CoinChanger::poll()
 			//else coin rejected
 			else
 			{
-				//m_serial->println("coin rejected");
+				m_serial->println("coin rejected");
 			}
 			i++; //cause we used 2 bytes
 		}
@@ -234,18 +235,13 @@ void CoinChanger::Dispense(unsigned long value)
 		
 		int num_5c = value / 5;
 		value -= num_5c * 5;
-
-		//5 cent currently not supported so dispense 10c instead
-		if (num_5c > 0)
-		{
-			num_10c++;
-		}
 		
 		Dispense(TUBE_2E, num_2e);
 		Dispense(TUBE_1E, num_1e);
 		Dispense(TUBE_50c, num_50c);
 		Dispense(TUBE_20c, num_20c);
 		Dispense(TUBE_10c, num_10c);
+		Dispense(TUBE_5c, num_5c);
 		
 		if (value > 0)
 			Dispense(value);
