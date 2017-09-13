@@ -2,6 +2,7 @@
 
 #include "MDBSerial.h"
 #include "SoftwareSerial.h"
+#include <Arduino.h>
 
 #define RESET 0x00
 #define SETUP 0x01
@@ -24,7 +25,7 @@ class MDBDevice
 {
 public:
 	explicit
-	MDBDevice(MDBSerial &mdb) : m_mdb(&mdb){}
+	MDBDevice(MDBSerial &mdb, void (*error)(String) = NULL, void (*warning)(String) = NULL) : m_mdb(&mdb), m_warning(warning), m_error(error){}
 
 	virtual bool Reset() = 0;
 
@@ -33,10 +34,13 @@ public:
 	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
 
 protected:
-	virtual long poll() = 0;
+	virtual int poll() = 0;
 
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;
+	
+	void (*m_error)(String);
+	void (*m_warning)(String);
 
 	int m_resetCount;
 	

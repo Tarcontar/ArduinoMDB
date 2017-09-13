@@ -1,7 +1,7 @@
 #include "CoinChanger.h"
 #include <Arduino.h>
 
-CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
+CoinChanger::CoinChanger(MDBSerial &mdb, void (*error)(String), void (*warning)(String)) : MDBDevice(mdb, error, warning)
 {
 	ADDRESS = 0x08;
 	STATUS = 0x02;
@@ -31,7 +31,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_file_transport_layer_supported = false;
 }
 
-long CoinChanger::Update(unsigned long &change)
+bool CoinChanger::Update(unsigned long &change)
 {
 	poll();
 	status();
@@ -43,7 +43,8 @@ long CoinChanger::Update(unsigned long &change)
 	}
 	
 	type(); // TODO: disable some coins when change is low
-	return 1; //TODO: return -1 etc if there is a problem
+	//TODO: return false if we have no change left
+	return true; 
 }
 
 bool CoinChanger::Reset()
@@ -60,6 +61,7 @@ bool CoinChanger::Reset()
 		return true;
 	}
 	m_serial->println(F("CC: RESET FAILED"));
+	m_warning(F("CC: RESET FAILED"));
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -69,13 +71,13 @@ bool CoinChanger::Reset()
 	{
 		m_resetCount = 0;
 		m_serial->println(F("CC: NOT RESPONDING"));
+		m_error(F("CC: NOT RESPONDING"));
 		return false;
 	}
 }
 
-long CoinChanger::poll()
+int CoinChanger::poll()
 {
-	long error_code = 0;
 	bool reset = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
@@ -112,10 +114,12 @@ long CoinChanger::poll()
 				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor);
 			}
 			//else coin rejected
+			/*
 			else
 			{
-				m_serial->println("coin rejected");
+				m_serial->println(F("coin rejected"));
 			}
+			*/
 			i++; //cause we used 2 bytes
 		}
 		//slug
@@ -144,6 +148,7 @@ long CoinChanger::poll()
 			case 4:
 				//defective tube sensor
 				//m_serial->println("defective tube sensor");
+				m_warning(F("defective tube sensor"));
 				break;
 			case 5:
 				//double arrival
@@ -186,16 +191,11 @@ long CoinChanger::poll()
 			//	m_serial->println("default");
 				//for (int i = 0; i < m_count; i++)
 				//	serial->println(result[i]);
-			
 			}
 		}
 	}
 	if (reset)
 		return JUST_RESET;
-	if (error_code > 0)
-	{
-		return error_code;
-	}
 	return 1;
 }
 
@@ -236,6 +236,10 @@ void CoinChanger::Dispense(unsigned long value)
 		int num_5c = value / 5;
 		value -= num_5c * 5;
 		
+		if (value > 0) //since we cant dispense 1c or 2c
+			num_5c++;
+		
+		//TODO: do error handling here
 		Dispense(TUBE_2E, num_2e);
 		Dispense(TUBE_1E, num_1e);
 		Dispense(TUBE_50c, num_50c);
@@ -243,7 +247,7 @@ void CoinChanger::Dispense(unsigned long value)
 		Dispense(TUBE_10c, num_10c);
 		Dispense(TUBE_5c, num_5c);
 		
-		if (value > 0)
+		if (value > 0) 
 			Dispense(value);
 	}
 }
@@ -255,33 +259,33 @@ void CoinChanger::Dispense(int coin, int count)
 	delay(10);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_serial->println(F("DISPENSE FAILED"));
+		m_serial->println(F("CC: DISPENSE FAILED"));
+		m_warning(F("CC: DISPENSE FAILED"));
 	}
 }
 
 void CoinChanger::Print()
 {
-	/*
-	m_serial->println("## CoinChanger ##");
-	m_serial->print("credit: ");
+	m_serial->println(F("## CoinChanger ##"));
+	m_serial->print(F("credit: "));
 	m_serial->println(m_credit);
 	
-	m_serial->print("country: ");
+	m_serial->print(F("country: "));
 	m_serial->println(m_country);
 
-	m_serial->print("feature level: ");
+	m_serial->print(F("feature level: "));
 	m_serial->println(m_feature_level);
 	
-	m_serial->print("coin scaling factor: ");
+	m_serial->print(F("coin scaling factor: "));
 	m_serial->println(m_coin_scaling_factor);
 	
-	m_serial->print("decimal places: ");
+	m_serial->print(F("decimal places: "));
 	m_serial->println(m_decimal_places);
 	
-	m_serial->print("coin type routing: ");
+	m_serial->print(F("coin type routing: "));
 	m_serial->println(m_coin_type_routing);
 	
-	m_serial->print("coin type credits: ");
+	m_serial->print(F("coin type credits: "));
 	for (int i = 0; i < 16; i++)
 	{
 		m_serial->print(m_coin_type_credit[i]);
@@ -289,17 +293,16 @@ void CoinChanger::Print()
     }
 	m_serial->println();
 	
-	m_serial->print("tube full status: ");
+	m_serial->print(F("tube full status: "));
 	m_serial->println(m_tube_full_status);
 	
-	m_serial->print("tube status: ");
+	m_serial->print(F("tube status: "));
 	for (int i = 0; i < 16; i++)
 	{
 		m_serial->print(m_tube_status[i]);
 		m_serial->print(" ");
     }
 	m_serial->println();
-	*/
 }
 
 void CoinChanger::setup()
@@ -335,6 +338,7 @@ void CoinChanger::setup()
 	}
 	delay(50);
 	m_serial->println(F("CC: setup error"));
+	m_warning(F("CC: setup error"));
 	setup();
 }
 
@@ -360,6 +364,7 @@ void CoinChanger::status()
 		return;
 	}
 	m_serial->println(F("CC: status error"));
+	m_warning(F("CC: status error"));
 	delay(50);
 	status();
 }
@@ -373,6 +378,7 @@ void CoinChanger::type()
 	{
 		delay(50);
 		m_serial->println(F("CC: type failed"));
+		m_warning(F("CC: type failed"));
 		type();
 	}
 }
@@ -402,7 +408,6 @@ void CoinChanger::expansion_identification()
 		if (m_optional_features & 0b1)
 		{
 			m_alternative_payout_supported = true;
-			m_serial->println("alternative payout");
 		}
 		if (m_optional_features & 0b10)
 		{
@@ -421,7 +426,8 @@ void CoinChanger::expansion_identification()
 	}
 	m_serial->println(m_count);
 	expansion_identification();
-	m_serial->println("expansion identification failed");
+	m_serial->println(F("CC: expansion identification failed"));
+	m_warning(F("CC: expansion identification failed"));
 }
 
 void CoinChanger::expansion_feature_enable()

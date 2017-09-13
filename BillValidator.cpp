@@ -1,7 +1,7 @@
 #include "BillValidator.h"
 #include <Arduino.h>
 
-BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
+BillValidator::BillValidator(MDBSerial &mdb, void (*error)(String), void (*warning)(String)) : MDBDevice(mdb, error, warning)
 {
 	ADDRESS = 0x30;
 	SECURITY = 0x02;
@@ -20,9 +20,9 @@ BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 		m_bill_type_credit[i] = 0;
 }
 
-long BillValidator::Update(unsigned long cc_change)
+bool BillValidator::Update(unsigned long cc_change)
 {
-	long error = poll();
+	poll();
 	stacker();
 
 	int b = 0;
@@ -42,7 +42,7 @@ long BillValidator::Update(unsigned long cc_change)
 	}
 	else
 		type(bills);
-	return 1;
+	return true;
 }
 
 bool BillValidator::Reset()
@@ -75,10 +75,8 @@ bool BillValidator::Reset()
 	}
 }
 
-long BillValidator::poll()
+int BillValidator::poll()
 {
-    long error_code = 0;
-	
 	bool reset = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
@@ -161,7 +159,6 @@ long BillValidator::poll()
 				break;
 			case 4:
 				//m_serial->println("defective dispenser sensor");
-				bitSet(error_code, 0);
 				break;
 			case 5:
 				//m_serial->println("not used");
@@ -202,12 +199,10 @@ long BillValidator::poll()
 			case 1:
 				//defective motor
 				//m_serial->println(F("defective motor"));
-				bitSet(error_code, 1);
 				break;
 			case 2:
 				//sensor problem
 				//m_serial->println(F"sensor problem"));
-				bitSet(error_code, 2);
 				break;
 			case 3:
 				//validator busy
@@ -220,7 +215,6 @@ long BillValidator::poll()
 			case 5:
 				//Validator jammed
 				//m_serial->println("validator jammed");
-				bitSet(error_code, 3);
 				break;
 			case 6:
 				//validator was reset
@@ -234,7 +228,6 @@ long BillValidator::poll()
 			case 8:
 				//cash box out of position
 				//m_serial->println("cash box out of position");
-				bitSet(error_code, 4);
 				break;
 			case 9:
 				//validator disabled
@@ -259,11 +252,6 @@ long BillValidator::poll()
 	}
 	if (reset)
 		return JUST_RESET;
-	if (error_code > 0)
-	{
-		bitSet(error_code, 31);
-		return error_code;
-	}
 	return 1;
 }
 
@@ -282,27 +270,25 @@ void BillValidator::security()
 
 void BillValidator::Print()
 {
-	/*
-	m_serial->println("BILL VALIDATOR: ");
-	m_serial->print(" credit: ");
+	m_serial->println(F("BILL VALIDATOR: "));
+	m_serial->print(F(" credit: "));
 	m_serial->print(m_credit);
-	m_serial->print("\n full: ");
+	m_serial->print(F("\n full: "));
 	m_serial->print((bool)m_full);
-	m_serial->print("\n bills in stacker: ");
+	m_serial->print(F("\n bills in stacker: "));
 	m_serial->print(m_bills_in_stacker);
-	m_serial->print("\n feature level: ");
+	m_serial->print(F("\n feature level: "));
 	m_serial->print((int)m_feature_level);
-	m_serial->print("\n bill scaling factor: ");
+	m_serial->print(F("\n bill scaling factor: "));
 	m_serial->print((int)m_bill_scaling_factor);
-	m_serial->print("\n decimal places: ");
+	m_serial->print(F("\n decimal places: "));
 	m_serial->print((int)m_decimal_places);
-	m_serial->print("\n capacity: ");
+	m_serial->print(F("\n capacity: "));
 	m_serial->print(m_stacker_capacity);
-	m_serial->print("\n security levels: ");
+	m_serial->print(F("\n security levels: "));
 	m_serial->print(m_security_levels);
 	
-	m_serial->println("\n###");
-	*/
+	m_serial->println(F("\n###"));
 }
 
 void BillValidator::setup()
