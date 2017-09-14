@@ -167,7 +167,7 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 	
 	sum += address | cmd;
 
-	for (unsigned int i = 0; i < dataCount; i++)
+	for (int i = 0; i < dataCount; i++)
 	{
 		write(data[i], DATA);
 		sum += data[i];
@@ -233,7 +233,7 @@ void MDBSerial::init()
 
 void MDBSerial::write(int cmd, int mode)
 {
-	while (!(*m_UCSRnA & (1 << UDRE)));
+	while (!(*m_UCSRnA & (1 << UDRE))) {}
 	if (mode)
 		*m_UCSRnB |= (1 << TXB8);
 	else
