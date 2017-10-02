@@ -25,17 +25,20 @@ class MDBDevice
 {
 public:
 	explicit
-	MDBDevice(MDBSerial &mdb, void (*error)(String) = NULL, void (*warning)(String) = NULL) : m_mdb(&mdb), m_warning(warning), m_error(error){}
+	MDBDevice(MDBSerial &mdb, void (*error)(String) = &Error, void (*warning)(String) = &Error) : m_mdb(&mdb), m_error(error), m_warning(warning) {}
 
 	virtual bool Reset() = 0;
 
 	virtual void Print() = 0;
 	
 	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
+	
+private:
+	static void Error(String t);
 
 protected:
 	virtual int poll() = 0;
-
+	
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;
 	

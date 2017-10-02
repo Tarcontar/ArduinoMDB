@@ -19,6 +19,10 @@
 #define RET 0xAA
 #define NAK 0xFF
 
+#define INTER_BYTE_TIME 1
+#define RESPONSE_TIME 5
+#define BYTE_SEND_TIME 1.2
+
 class MDBSerial
 {
 public:
@@ -29,7 +33,7 @@ public:
 	void Ret();
 
 	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
-	int GetResponse(char data[] = 0, int *count = 0);
+	int GetResponse(char data[] = 0, int *count = 0, int num_bytes = 0);
 
 private:
 

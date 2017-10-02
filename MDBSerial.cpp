@@ -8,9 +8,10 @@ struct data
 	char mode;
 };
 
-volatile data buffer[100];
-volatile int pos = 0;
-volatile bool error = false;
+volatile data v_buffer[100];
+volatile int v_pos = 0;
+volatile bool v_error = false;
+volatile bool v_msg_complete = false;
 volatile int v_uart = 0;
 
 volatile unsigned char *m_UDRn;
@@ -95,11 +96,15 @@ ISR(USART1_RX_vect)
 
 		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
 		{
-			error = true;
+			v_error = true;
 		}
-		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
-		buffer[pos].value = *m_UDRn;
-		pos++;
+		v_buffer[v_pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		if (v_buffer[v_pos].mode == 1)
+		{
+			//we got an ack or an checksum
+			v_msg_complete = true;
+		}
+		v_buffer[v_pos++].value = *m_UDRn;
 	}
 }
 
@@ -111,11 +116,15 @@ ISR(USART2_RX_vect)
 
 		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
 		{
-			error = true;
+			v_error = true;
 		}
-		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
-		buffer[pos].value = *m_UDRn;
-		pos++;
+		v_buffer[v_pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		if (v_buffer[v_pos].mode == 1)
+		{
+			//we got an ack or an checksum
+			v_msg_complete = true;
+		}
+		v_buffer[v_pos++].value = *m_UDRn;
 	}
 }
 
@@ -127,11 +136,15 @@ ISR(USART3_RX_vect)
 
 		if (status & ((1 << FE) | (1 << DOR) | (1 << UPE)))
 		{
-			error = true;
+			v_error = true;
 		}
-		buffer[pos].mode = (*m_UCSRnB >> 1) & 0x01;
-		buffer[pos].value = *m_UDRn;
-		pos++;
+		v_buffer[v_pos].mode = (*m_UCSRnB >> 1) & 0x01;
+		if (v_buffer[v_pos].mode == 1)
+		{
+			//we got an ack or an checksum
+			v_msg_complete = true;
+		}
+		v_buffer[v_pos++].value = *m_UDRn;
 	}
 }
 
@@ -173,49 +186,64 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 		sum += data[i];
 	}
 	write(sum, DATA); //send the checksum
+	delay(RESPONSE_TIME * 2);
 }
 
-int MDBSerial::GetResponse(char data[], int *count)
+int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 {	
 	char sum = 0;
 	*count = 0;
-	if (error)
+	
+	//wait for the response to arrive
+	delay(RESPONSE_TIME);
+	for (int i = 0; i < num_bytes; i++)
 	{
-		error = false;
-		pos = 0;
-		return -1;
+		if (v_msg_complete)
+		{
+			break;
+		}
+		else if (v_error)
+		{
+			v_error = false;
+			v_pos = 0;
+			return -1;
+		}
+		else
+		{
+			delay(BYTE_SEND_TIME + INTER_BYTE_TIME);
+		}
 	}
 	
-	if (pos == 0)
+	if (v_pos == 0)
 		return -2;
  
-    *count = pos - 1; //do not send checksum
-	for (int i = 0; i < pos; i++)
+    *count = v_pos - 1; //do not send checksum
+	for (int i = 0; i < v_pos; i++)
 	{
-		char val = buffer[i].value;
-		if (buffer[i].mode != 1)
+		char val = v_buffer[i].value;
+		if (v_buffer[i].mode != 1)
 		{
 			data[i] = val;
 			sum += val;
 		}
 		else
 		{
-			if (pos == 1) //we got an ACK
+			if (v_pos == 1) //we got an ACK
 			{
-				pos = 0;
+				v_pos = 0;
 				return ACK;
 			}
 			else //checksum of data
 			{
 				if (sum != val)
 				{
-					pos = 0;
+					v_pos = 0;
 					return -3;
 				}
 			}
 		}
 	}
-	pos = 0;
+	v_pos = 0;
 	return 1;
 }
 

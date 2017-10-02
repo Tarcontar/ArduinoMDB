@@ -1,12 +1,24 @@
 #include "BillValidator.h"
 #include <Arduino.h>
 
+#define BV_RESET_COMPLETED "BV: RESET COMPLETED"
+#define BV_RESET_FAILED "BV: RESET FAILED"
+#define BV_NOT_RESPONDING "BV: NOT RESPONDING"
+#define BV_SECURITY_FAILED "BV: SECURITY FAILED"
+#define BV_SETUP_ERROR "BV: SETUP ERROR"
+#define BV_TYPE_ERROR "BV: TYPE ERROR"
+#define BV_ESCROW_ERROR "BV: ESCROW ERROR"
+#define BV_STACKER_ERROR "BV: STACKER ERROR"
+
+
 BillValidator::BillValidator(MDBSerial &mdb, void (*error)(String), void (*warning)(String)) : MDBDevice(mdb, error, warning)
 {
 	ADDRESS = 0x30;
 	SECURITY = 0x02;
 	ESCROW = 0x05;
 	STACKER = 0x06;
+	
+	m_resetCount = 0;
 	
 	m_credit = 0;
 	m_full = false;
@@ -48,7 +60,6 @@ bool BillValidator::Update(unsigned long cc_change)
 bool BillValidator::Reset()
 {
 	m_mdb->SendCommand(ADDRESS, RESET);
-	delay(10);
 	if (m_mdb->GetResponse() == ACK)
 	{
 		while (poll() != JUST_RESET); //is possible deadloop
@@ -58,10 +69,10 @@ bool BillValidator::Reset()
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
 		Print();
-		m_serial->println(F("BV: RESET Completed"));
+		m_serial->println(BV_RESET_COMPLETED);
 		return true;
 	}
-	m_serial->println(F("BV: RESET failed"));
+	m_serial->println(BV_RESET_FAILED);
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -70,7 +81,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-		m_serial->println(F("BV: NOT RESPONDING"));
+		m_serial->println(BV_NOT_RESPONDING);
 		return false;
 	}
 }
@@ -81,7 +92,6 @@ int BillValidator::poll()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
-	delay(5);
 	m_mdb->Ack();
 	delay(45);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count);
@@ -263,13 +273,14 @@ void BillValidator::security()
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(F("BV: security failed"));
+		m_serial->println(BV_SECURITY_FAILED);
 		security();
 	}
 }
 
 void BillValidator::Print()
 {
+	/*
 	m_serial->println(F("BILL VALIDATOR: "));
 	m_serial->print(F(" credit: "));
 	m_serial->print(m_credit);
@@ -289,6 +300,7 @@ void BillValidator::Print()
 	m_serial->print(m_security_levels);
 	
 	m_serial->println(F("\n###"));
+	*/
 }
 
 void BillValidator::setup()
@@ -317,7 +329,7 @@ void BillValidator::setup()
 	}
 	
 	delay(50);
-	m_serial->println(F("BV: setup error"));
+	m_serial->println(BV_SETUP_ERROR);
 	setup();
 }
 
@@ -328,7 +340,7 @@ void BillValidator::type(int bills[])
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(F("BV: type error"));
+		m_serial->println(BV_TYPE_ERROR);
 		type(bills);
 	}
 }
@@ -342,7 +354,7 @@ void BillValidator::escrow(bool accept)
 	delay(10);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_serial->println(F("BV: escrow error"));
+		m_serial->println(BV_ESCROW_ERROR);
 		delay(50);
 		escrow(accept);
 	}
@@ -369,7 +381,7 @@ void BillValidator::stacker()
 		//m_serial->println(F("stacker ready"));
 		return;
 	}
-	m_serial->println(F("BV: stacker error"));
+	m_serial->println(BV_STACKER_ERROR);
 	delay(50);
 	stacker();
 }
