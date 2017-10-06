@@ -1,4 +1,4 @@
-#include "BillValidator.h"
+#include "BillValidator.hpp"
 #include <Arduino.h>
 
 #define BV_RESET_COMPLETED "BV: RESET COMPLETED"

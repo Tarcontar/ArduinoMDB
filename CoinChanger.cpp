@@ -1,4 +1,4 @@
-#include "CoinChanger.h"
+#include "CoinChanger.hpp"
 #include <Arduino.h>
 
 #define CC_RESET_COMPLETED "CC: RESET COMPLETED"

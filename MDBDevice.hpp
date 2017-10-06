@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MDBSerial.h"
+#include "MDBSerial.hpp"
 #include "SoftwareSerial.h"
 #include <Arduino.h>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MDBDevice.h"
+#include "MDBDevice.hpp"
 
 class BillValidator : public MDBDevice
 {

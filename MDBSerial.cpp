@@ -1,4 +1,4 @@
-#include "MDBSerial.h"
+#include "MDBSerial.hpp"
 #include <Arduino.h>
 #include <avr/interrupt.h>
 

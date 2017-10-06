@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MDBDevice.h"
+#include "MDBDevice.hpp"
 
 #define TUBE_2E  5
 #define TUBE_1E  4
