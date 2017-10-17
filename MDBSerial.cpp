@@ -173,10 +173,20 @@ void MDBSerial::Ret()
 	write(RET, DATA);
 }
 
-void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
+void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount, int subCmd)
 {
 	char sum = 0;
 	write(address | cmd, ADDRESS);
+	
+	//subcommand followed by checksum? subcommand with address?
+	if (subCmd >= 0)
+	{
+		write(subCmd, ADDRESS);
+		//write(subCmd, DATA);
+		//write(address | subCmd, ADDRESS);
+		sum += subCmd;
+		//sum += address | subCmd;
+	}
 	
 	sum += address | cmd;
 
