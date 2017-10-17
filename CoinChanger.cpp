@@ -211,7 +211,7 @@ int CoinChanger::poll()
 	return 1;
 }
 
-void CoinChanger::Dispense(unsigned long value)
+bool CoinChanger::Dispense(unsigned long value)
 {
 	if (m_alternative_payout_supported)
 	{
@@ -221,50 +221,83 @@ void CoinChanger::Dispense(unsigned long value)
 	else
 	{
 		int num_2e = value / 200;
-		if (num_2e > m_tube_status[TUBE_2E])
-			num_2e = m_tube_status[TUBE_2E];
-		value -= num_2e * 200;
+		num_2e = min(num_2e, m_tube_status[TUBE_2E]); 
+		if (Dispense(TUBE_2E, num_2e))
+			value -= num_2e * 200;
 		
 		int num_1e = value / 100;
-		if (num_1e > m_tube_status[TUBE_1E])
-			num_1e = m_tube_status[TUBE_1E];
-		value -= num_1e * 100;
+		num_1e = min(num_1e, m_tube_status[TUBE_1E]);
+		if (Dispense(TUBE_1E, num_1e))
+			value -= num_1e * 100;
 		
 		int num_50c = value / 50;
-		if (num_50c > m_tube_status[TUBE_50c])
-			num_50c = m_tube_status[TUBE_50c];
-		value -= num_50c * 50;
+		num_50c = min(num_50c, m_tube_status[TUBE_50c]);
+		if (Dispense(TUBE_50c, num_50c))
+			value -= num_50c * 50;
 		
 		int num_20c = value / 20;
-		if (num_20c > m_tube_status[TUBE_20c])
-			num_20c = m_tube_status[TUBE_20c];
-		value -= num_20c * 20;
+		num_20c = min(num_20c, m_tube_status[TUBE_20c]);
+		if (Dispense(TUBE_20c, num_20c))
+			value -= num_20c * 20;
 		
 		int num_10c = value / 10;
-		if (num_10c > m_tube_status[TUBE_10c])
-			num_10c = m_tube_status[TUBE_10c];
-		value -= num_10c * 10;
+		num_10c = min(num_10c, m_tube_status[TUBE_10c]);
+		if (Dispense(TUBE_10c, num_10c))
+			value -= num_10c * 10;
 		
 		int num_5c = value / 5;
-		value -= num_5c * 5;
+		num_5c = min(num_5c, m_tube_status[TUBE_5c]);
+		if (Dispense(TUBE_5c, num_5c))
+			value -= num_5c * 5;
 		
-		if (value > 0) //since we cant dispense 1c or 2c
-			num_5c++;
-		
-		//TODO: do error handling here
-		Dispense(TUBE_2E, num_2e);
-		Dispense(TUBE_1E, num_1e);
-		Dispense(TUBE_50c, num_50c);
-		Dispense(TUBE_20c, num_20c);
-		Dispense(TUBE_10c, num_10c);
-		Dispense(TUBE_5c, num_5c);
-		
+		//check if we can dispense some other coins, eg no 5c available
 		if (value > 0) 
-			Dispense(value);
+		{
+			if (value < 5) //no 1c and 2c available in CC
+			{
+				if (m_tube_status[TUBE_5c] > 0)
+					if (Dispense(TUBE_5c, 1))
+						value = 0;
+			}
+			else if (value < 10)
+			{
+				if (m_tube_status[TUBE_10c] > 0)
+					if (Dispense(TUBE_10c, 1))
+						value = 0;
+			}
+			else if (value < 20)
+			{
+				if (m_tube_status[TUBE_20c] > 0)
+					if (Dispense(TUBE_20c, 1))
+						value = 0;
+			}
+			else if (value < 50)
+			{
+				if (m_tube_status[TUBE_50c] > 0)
+					if (Dispense(TUBE_50c, 1))
+						value = 0;
+			}
+			else if (value < 100)
+			{
+				if (m_tube_status[TUBE_1E] > 0)
+					if (Dispense(TUBE_1E, 1))
+						value = 0;
+			}
+			else if (value < 200)
+			{
+				if (m_tube_status[TUBE_2E] > 0)
+					if (Dispense(TUBE_2E, 1))
+						value = 0;
+			}
+		}
+					
+		if (value > 0)  //too less coins in CC to dispense change
+			return false; //maybe return bill from bill validator?
+		return true;
 	}
 }
 
-void CoinChanger::Dispense(int coin, int count)
+bool CoinChanger::Dispense(int coin, int count)
 {
 	int out = (count << 4) | coin;
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
@@ -272,7 +305,9 @@ void CoinChanger::Dispense(int coin, int count)
 	{
 		m_serial->println(CC_DISPENSE_FAILED);
 		m_warning(CC_DISPENSE_FAILED);
+		return false;
 	}
+	return true;
 }
 
 void CoinChanger::Print()

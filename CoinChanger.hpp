@@ -17,8 +17,8 @@ public:
 	//return false if we encounter sth so we cant go on
 	bool Update(unsigned long &change);
 	bool Reset();
-	void Dispense(unsigned long value);
-	void Dispense(int coin, int count);
+	bool Dispense(unsigned long value);
+	bool Dispense(int coin, int count);
 	void Print();
 
 	inline unsigned long GetCredit() { return m_credit; }
