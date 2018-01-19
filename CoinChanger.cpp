@@ -54,7 +54,8 @@ bool CoinChanger::Update(unsigned long &change)
 	}
 	
 	type(); // TODO: disable some coins when change is low
-	//TODO: return false if we have no change left
+	if (change == 0)
+		return false;
 	return true; 
 }
 
