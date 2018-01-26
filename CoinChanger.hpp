@@ -32,7 +32,7 @@ private:
 	void type();
 	void type_new();
 	void expansion_identification();
-	void expansion_feature_enable();
+	void expansion_feature_enable(int features);
 	void expansion_payout(int value);
 
 	int ADDRESS;
@@ -49,7 +49,7 @@ private:
 	char m_coin_scaling_factor;
 	char m_decimal_places;
 	unsigned int m_coin_type_routing;
-	char m_coin_type_credit[16];
+	char m_coin_type_credit[16]; //coin value divided by coin scaling factor
 
 	unsigned int m_tube_full_status;
 	char m_tube_status[16];

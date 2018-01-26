@@ -28,13 +28,14 @@
 class MDBSerial
 {
 public:
-	MDBSerial(int uart = 1);
+	MDBSerial(int uart = 0);
 	
 	void Ack();
 	void Nak();
 	void Ret();
 
-	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
+	void SendCommand(int address, int cmd, int *data, int dataCount);
+	void SendCommand(int address, int cmd, int subCmd = -1, int *data = 0, int dataCount = 0);
 	int GetResponse(char data[] = 0, int *count = 0, int num_bytes = 0);
 
 private:

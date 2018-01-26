@@ -72,7 +72,7 @@ bool CoinChanger::Reset()
 		}
 		setup();
 		status();
-		//Print();
+		Print();
 		m_serial->println(CC_RESET_COMPLETED);
 		return true;
 	}
@@ -101,8 +101,6 @@ int CoinChanger::poll()
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
-	m_serial->println(answer);
-	m_serial->println(m_count);
 	if (answer == ACK)
 	{
 		return 1;
@@ -230,6 +228,7 @@ bool CoinChanger::Dispense(unsigned long value)
 	}
 	else
 	{
+		//TODO: do this in for loop with  m_coin_type_credit[i]
 		int num_2e = value / 200;
 		num_2e = min(num_2e, m_tube_status[TUBE_2E]); 
 		if (Dispense(TUBE_2E, num_2e))
@@ -323,7 +322,6 @@ bool CoinChanger::Dispense(int coin, int count)
 void CoinChanger::Print()
 {
 #ifdef MDB_DEBUG
-/*
 	m_serial->println("## CoinChanger ##");
 	m_serial->print("credit: ");
 	m_serial->println(m_credit);
@@ -332,13 +330,13 @@ void CoinChanger::Print()
 	m_serial->println(m_country);
 
 	m_serial->print("feature level: ");
-	m_serial->println(m_feature_level);
+	m_serial->println((int)m_feature_level);
 	
 	m_serial->print("coin scaling factor: ");
-	m_serial->println(m_coin_scaling_factor);
+	m_serial->println((int)m_coin_scaling_factor);
 	
 	m_serial->print("decimal places: ");
-	m_serial->println(m_decimal_places);
+	m_serial->println((int)m_decimal_places);
 	
 	m_serial->print("coin type routing: ");
 	m_serial->println(m_coin_type_routing);
@@ -346,22 +344,42 @@ void CoinChanger::Print()
 	m_serial->print("coin type credits: ");
 	for (int i = 0; i < 16; i++)
 	{
-		m_serial->print(m_coin_type_credit[i]);
+		m_serial->print((int)m_coin_type_credit[i]);
 		m_serial->print(" ");
     }
 	m_serial->println();
 	
 	m_serial->print("tube full status: ");
-	m_serial->println(m_tube_full_status);
+	m_serial->println((int)m_tube_full_status);
 	
 	m_serial->print("tube status: ");
 	for (int i = 0; i < 16; i++)
 	{
-		m_serial->print(m_tube_status[i]);
+		m_serial->print((int)m_tube_status[i]);
 		m_serial->print(" ");
     }
 	m_serial->println();
-	*/
+	
+	m_serial->print("software version: ");
+	m_serial->println(m_software_version);
+	
+	m_serial->print("optional features: ");
+	m_serial->println(m_optional_features);
+	
+	m_serial->print("alternative payout supported: ");
+	m_serial->println(m_alternative_payout_supported);
+	
+	m_serial->print("extended diagnostic supported: ");
+	m_serial->println(m_extended_diagnostic_supported);
+	
+	m_serial->print("mauall fill and payout supported: ");
+	m_serial->println(m_manual_fill_and_payout_supported);
+	
+	m_serial->print("file transport layer supported: ");
+	m_serial->println(m_file_transport_layer_supported);
+	
+	m_serial->println("\n######");
+	m_serial->println();
 #endif	
 }
 
@@ -370,8 +388,6 @@ void CoinChanger::setup()
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 23);
-	m_serial->println(answer);
-	m_serial->println(m_count);
 	if (answer >= 0 && m_count == 23)
 	{
 		m_feature_level = m_buffer[0];
@@ -384,14 +400,11 @@ void CoinChanger::setup()
 			m_coin_type_credit[i] = m_buffer[7 + i];
 		}
 
-		//test for expansion support
-		/*
 		if (m_feature_level >= 3)
 		{
 			expansion_identification();
-			expansion_feature_enable();
+			expansion_feature_enable(m_optional_features);
 		}
-		*/
 		m_serial->println("CC: setup complete");
 		return;
 	}
@@ -441,10 +454,9 @@ void CoinChanger::type()
 
 void CoinChanger::expansion_identification()
 {
-	m_mdb->SendCommand(ADDRESS, EXPANSION + IDENTIFICATION);
+	m_mdb->SendCommand(ADDRESS, EXPANSION, IDENTIFICATION);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 33);
-	m_serial->println(answer);
 	if (answer > 0 && m_count == 33)
 	{
 		// * 1L to overcome 16bit integer error
@@ -474,7 +486,6 @@ void CoinChanger::expansion_identification()
 		{ 
 			m_file_transport_layer_supported = true;
 		}
-		expansion_feature_enable();
 		return;
 	}
 
@@ -483,14 +494,13 @@ void CoinChanger::expansion_identification()
 	//m_warning(CC_EXP_ID_ERROR);
 }
 
-void CoinChanger::expansion_feature_enable()
+void CoinChanger::expansion_feature_enable(int features)
 {
-	//enable all features at the moment
-	int out[] = { 0x00, 0x00, 0x00, 0x04 };
-	m_mdb->SendCommand(ADDRESS, EXPANSION + FEATURE_ENABLE, out, 4);
+	int out[] = { 0x00, 0x00, 0x00, features };
+	m_mdb->SendCommand(ADDRESS, EXPANSION, FEATURE_ENABLE, out, 4);
 }
 
 void CoinChanger::expansion_payout(int value)
 {
-	m_mdb->SendCommand(ADDRESS, EXPANSION + PAYOUT, &value, 1);
+	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &value, 1);
 }
