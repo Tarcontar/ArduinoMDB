@@ -12,7 +12,7 @@
 class CoinChanger : public MDBDevice
 {
 public:
-	CoinChanger(MDBSerial &mdb, void (*error)(String) = NULL, void (*warning)(String) = NULL);
+	CoinChanger(MDBSerial &mdb /*, void (*error)(String) = NULL, void (*warning)(String) = NULL*/);
 
 	//return false if we encounter sth so we cant go on
 	bool Update(unsigned long &change);
@@ -20,10 +20,11 @@ public:
 	bool Dispense(unsigned long value);
 	bool Dispense(int coin, int count);
 	void Print();
-
+	
+	inline unsigned long GetDispensedValue() { unsigned long val = m_dispensed_value; m_dispensed_value = 0; return val; }
 	inline unsigned long GetCredit() { return m_credit; }
 	inline void ClearCredit() { m_credit = 0; }
-
+	
 private:
 	int poll();
 	void setup();
@@ -42,6 +43,8 @@ private:
 	int m_dispenseableCoins;
 
 	unsigned long m_credit;
+	
+	unsigned long m_dispensed_value;
 
 	char m_coin_scaling_factor;
 	char m_decimal_places;

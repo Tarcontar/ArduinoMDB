@@ -11,7 +11,7 @@
 #define BV_STACKER_ERROR "BV: STACKER ERROR"
 
 
-BillValidator::BillValidator(MDBSerial &mdb, void (*error)(String), void (*warning)(String)) : MDBDevice(mdb, error, warning)
+BillValidator::BillValidator(MDBSerial &mdb /*, void (*error)(String), void (*warning)(String)*/) : MDBDevice(mdb /*, error, warning*/)
 {
 	ADDRESS = 0x30;
 	SECURITY = 0x02;

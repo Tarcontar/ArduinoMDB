@@ -5,7 +5,7 @@
 class BillValidator : public MDBDevice
 {
 public:
-	BillValidator(MDBSerial &mdb, void (*error)(String) = NULL, void (*warning)(String) = NULL);
+	BillValidator(MDBSerial &mdb /*, void (*error)(String) = NULL, void (*warning)(String) = NULL*/);
 
 	bool Update(unsigned long cc_change);
 

@@ -173,21 +173,10 @@ void MDBSerial::Ret()
 	write(RET, DATA);
 }
 
-void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount, int subCmd)
+void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 {
 	char sum = 0;
 	write(address | cmd, ADDRESS);
-	
-	//subcommand followed by checksum? subcommand with address?
-	if (subCmd >= 0)
-	{
-		write(subCmd, ADDRESS);
-		//write(subCmd, DATA);
-		//write(address | subCmd, ADDRESS);
-		sum += subCmd;
-		//sum += address | subCmd;
-	}
-	
 	sum += address | cmd;
 
 	for (int i = 0; i < dataCount; i++)
@@ -224,6 +213,7 @@ int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 		}
 	}
 	
+	//nothing received
 	if (v_pos == 0)
 		return -2;
  
@@ -238,7 +228,7 @@ int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 		}
 		else
 		{
-			if (v_pos == 1) //we got an ACK
+			if (v_pos == 1) //we got an ACK //or NAK or RET??
 			{
 				v_pos = 0;
 				return ACK;

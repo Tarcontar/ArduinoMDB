@@ -1,38 +1,40 @@
 #pragma once
 
+#define MDB_DEBUG TRUE//undefine to minimize code
+
 //define registers
-#define TXB8 0
-#define UPE 2
-#define DOR 3
-#define FE 4
-#define UDRE 5
-#define RXC 7
+#define TXB8 	0
+#define UPE 	2
+#define DOR 	3
+#define FE 		4
+#define UDRE 	5
+#define RXC 	7
 
 //MDB specific stuff
 #define DATA_MAX 36
 
-#define TIME_OUT 5
-#define TIME_BREAK 100
-#define TIME_SETUP 200
+#define TIME_OUT 		5
+#define TIME_BREAK 	100
+#define TIME_SETUP 	200
 
-#define ACK 0x00
-#define RET 0xAA
-#define NAK 0xFF
+#define ACK 	0x00
+#define RET 	0xAA
+#define NAK 	0xFF
 
-#define INTER_BYTE_TIME 1
-#define RESPONSE_TIME 5
-#define BYTE_SEND_TIME 1.2
+#define INTER_BYTE_TIME 	1
+#define RESPONSE_TIME 		5
+#define BYTE_SEND_TIME 	1.2
 
 class MDBSerial
 {
 public:
-	MDBSerial(int uart = 0);
-
+	MDBSerial(int uart = 1);
+	
 	void Ack();
 	void Nak();
 	void Ret();
 
-	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0, int subCmd = -1);
+	void SendCommand(int address, int cmd, int *data = 0, int dataCount = 0);
 	int GetResponse(char data[] = 0, int *count = 0, int num_bytes = 0);
 
 private:
@@ -46,6 +48,7 @@ private:
 	void init();
 	void write(int cmd, int mode);
 
+private:
 	unsigned long m_commandSentTime;
 
 	int m_TXn;

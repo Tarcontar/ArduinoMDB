@@ -10,7 +10,7 @@
 #define CC_TYPE_ERROR "CC: TYPE ERROR"
 #define CC_EXP_ID_ERROR "CC: EXP ID ERROR"
 
-CoinChanger::CoinChanger(MDBSerial &mdb, void (*error)(String), void (*warning)(String)) : MDBDevice(mdb, error, warning)
+CoinChanger::CoinChanger(MDBSerial &mdb /*, void (*error)(String), void (*warning)(String)*/) : MDBDevice(mdb /*, error, warning*/)
 {
 	ADDRESS = 0x08;
 	STATUS = 0x02;
@@ -72,6 +72,7 @@ bool CoinChanger::Reset()
 		}
 		setup();
 		status();
+		//Print();
 		m_serial->println(CC_RESET_COMPLETED);
 		return true;
 	}
@@ -100,6 +101,8 @@ int CoinChanger::poll()
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	m_serial->println(answer);
+	m_serial->println(m_count);
 	if (answer == ACK)
 	{
 		return 1;
@@ -111,9 +114,12 @@ int CoinChanger::poll()
 		//coins dispensed manually
 		if (m_buffer[i] & 0b10000000)
 		{
-			//int number = (m_buffer[i] & 0b01110000) >> 4;
-			//int type = m_buffer[i] & 0b00001111;
-			//int coins_in_tube = m_buffer[i + 1];
+			
+			int count = (m_buffer[i] & 0b01110000) >> 4;
+			int type = m_buffer[i] & 0b00001111;
+			int coins_in_tube = m_buffer[i + 1];
+			
+			m_dispensed_value += m_coin_type_credit[type] * m_coin_scaling_factor * count;
 			i++; //cause we used 2 bytes
 		}
 		//coins deposited
@@ -121,25 +127,24 @@ int CoinChanger::poll()
 		{
 			int routing = (m_buffer[i] & 0b00110000) >> 4;
 			int type = m_buffer[i] & 0b00001111;
-			//int those_coins_in_tube = m_buffer[i + 1];
+			int those_coins_in_tube = m_buffer[i + 1];
 			if (routing < 2)
 			{
 				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor);
 			}
+			
 			//else coin rejected
-			/*
 			else
 			{
-				m_serial->println(F("coin rejected"));
+				m_serial->println("coin rejected");
 			}
-			*/
 			i++; //cause we used 2 bytes
 		}
 		//slug
 		else if (m_buffer[i] & 0b00100000)
 		{
-			//int slug_count = m_buffer[i] & 0b00011111;
-			//m_serial->println("slug");
+			int slug_count = m_buffer[i] & 0b00011111;
+			m_serial->println("slug");
 		}
 		//status
 		else
@@ -148,62 +153,66 @@ int CoinChanger::poll()
 			{
 			case 1:
 				//escrow request
-				//m_serial->println("escrow request");
+				m_serial->println("escrow request");
 				break;
 			case 2:
 				//changer payout busy
-				//m_serial->println("changer payout busy");
+				m_serial->println("changer payout busy");
 				break;
 			case 3:
 				//no credit
-				//m_serial->println("no credit");
+				m_serial->println("no credit");
 				break;
+				
 			case 4:
 				//defective tube sensor
-				//m_serial->println("defective tube sensor");
-				m_warning("defective tube sensor");
+				m_serial->println("defective tube sensor");
+				//m_warning("defective tube sensor");
 				break;
+
 			case 5:
 				//double arrival
-				//m_serial->println("double arrival");
+				m_serial->println("double arrival");
 				break;
 			case 6:
 				//acceptor unplugged
-				//m_serial->println("acceptor unplugged");
+				m_serial->println("acceptor unplugged");
 				break;
 			case 7:
 				//tube jam
-				//m_serial->println("tube jam");
+				m_serial->println("tube jam");
 				break;
 			case 8:
 				//ROM checksum error
-				//m_serial->println("ROM checksum error");
+				m_serial->println("ROM checksum error");
 				break;
 			case 9:
 				//coin routing error
-				//m_serial->println("coin routing error");
+				m_serial->println("coin routing error");
 				break;
 			case 10:
 				//changer busy
-				//m_serial->println("changer busy");
+				m_serial->println("changer busy");
 				break;
+			
 			case 11:
 				//changer was reset
-				//m_serial->println("JUST RESET");
+				m_serial->println("JUST RESET");
 				reset = true;
 				break;
+				
 			case 12:
 				//coin jam
-				//m_serial->println("coin jam");
+				m_serial->println("coin jam");
 				break;
 			case 13:
 				//possible credited coin removal
-				//m_serial->println("credited coin removal");
+				m_serial->println("credited coin removal");
 				break;
-			//default:
-			//	m_serial->println("default");
-				//for (int i = 0; i < m_count; i++)
-				//	serial->println(result[i]);
+			default:
+				m_serial->println("default");
+				for ( ; i < m_count; i++)
+					m_serial->println(m_buffer[i]);
 			}
 		}
 	}
@@ -305,7 +314,7 @@ bool CoinChanger::Dispense(int coin, int count)
 	if (m_mdb->GetResponse() != ACK)
 	{
 		m_serial->println(CC_DISPENSE_FAILED);
-		m_warning(CC_DISPENSE_FAILED);
+		//m_warning(CC_DISPENSE_FAILED);
 		return false;
 	}
 	return true;
@@ -313,7 +322,8 @@ bool CoinChanger::Dispense(int coin, int count)
 
 void CoinChanger::Print()
 {
-	/*
+#ifdef MDB_DEBUG
+/*
 	m_serial->println("## CoinChanger ##");
 	m_serial->print("credit: ");
 	m_serial->println(m_credit);
@@ -352,6 +362,7 @@ void CoinChanger::Print()
     }
 	m_serial->println();
 	*/
+#endif	
 }
 
 void CoinChanger::setup()
@@ -359,6 +370,8 @@ void CoinChanger::setup()
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 23);
+	m_serial->println(answer);
+	m_serial->println(m_count);
 	if (answer >= 0 && m_count == 23)
 	{
 		m_feature_level = m_buffer[0];
@@ -372,19 +385,19 @@ void CoinChanger::setup()
 		}
 
 		//test for expansion support
+		/*
 		if (m_feature_level >= 3)
 		{
-			//expansion_identification();
-			//expansion_feature_enable();
-			//Expansion(0x05); //Status //where is this from?
+			expansion_identification();
+			expansion_feature_enable();
 		}
-
-		//m_serial->println(F("CC: setup complete"));
+		*/
+		m_serial->println("CC: setup complete");
 		return;
 	}
 	delay(50);
 	m_serial->println(CC_SETUP_ERROR);
-	m_warning(CC_SETUP_ERROR);
+	//m_warning(CC_SETUP_ERROR);
 	setup();
 }
 
@@ -402,12 +415,13 @@ void CoinChanger::status()
 			//number of coins in the tube
 			m_tube_status[i] = m_buffer[2 + i];
 		}
-
-		//m_serial->println(F("CC: status complete"));
+#ifdef MDB_DEBUG
+		m_serial->println("CC: status complete");
+#endif
 		return;
 	}
 	m_serial->println(CC_STATUS_ERROR);
-	m_warning(CC_STATUS_ERROR);
+	//m_warning(CC_STATUS_ERROR);
 	delay(50);
 	status();
 }
@@ -420,7 +434,7 @@ void CoinChanger::type()
 	{
 		delay(50);
 		m_serial->println(CC_TYPE_ERROR);
-		m_warning(CC_TYPE_ERROR);
+		//m_warning(CC_TYPE_ERROR);
 		type();
 	}
 }
@@ -466,7 +480,7 @@ void CoinChanger::expansion_identification()
 
 	expansion_identification();
 	m_serial->println(CC_EXP_ID_ERROR);
-	m_warning(CC_EXP_ID_ERROR);
+	//m_warning(CC_EXP_ID_ERROR);
 }
 
 void CoinChanger::expansion_feature_enable()

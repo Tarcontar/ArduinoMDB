@@ -25,7 +25,7 @@ class MDBDevice
 {
 public:
 	explicit
-	MDBDevice(MDBSerial &mdb, void (*error)(String) = &Error, void (*warning)(String) = &Error) : m_mdb(&mdb), m_error(error), m_warning(warning) {}
+	MDBDevice(MDBSerial &mdb /*, void (*error)(String) = &Error, void (*warning)(String) = &Error */) : m_mdb(&mdb) /*, m_error(error), m_warning(warning)*/ {}
 
 	virtual bool Reset() = 0;
 
@@ -42,8 +42,8 @@ protected:
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;
 	
-	void (*m_error)(String);
-	void (*m_warning)(String);
+	//void (*m_error)(String);
+	//void (*m_warning)(String);
 
 	int m_resetCount;
 	
