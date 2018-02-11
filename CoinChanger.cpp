@@ -10,7 +10,7 @@
 #define CC_TYPE_ERROR "CC: TYPE ERROR"
 #define CC_EXP_ID_ERROR "CC: EXP ID ERROR"
 
-CoinChanger::CoinChanger(MDBSerial &mdb /*, void (*error)(String), void (*warning)(String)*/) : MDBDevice(mdb /*, error, warning*/)
+CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
 	ADDRESS = 0x08;
 	STATUS = 0x02;
@@ -40,20 +40,49 @@ CoinChanger::CoinChanger(MDBSerial &mdb /*, void (*error)(String), void (*warnin
 	m_extended_diagnostic_supported = false;
 	m_manual_fill_and_payout_supported = false;
 	m_file_transport_layer_supported = false;
+	
+	m_update_count = 0;
+	
+	m_value_to_dispense = 0;
+	m_dispensed_value = 0;
 }
 
 bool CoinChanger::Update(unsigned long &change)
 {
 	poll();
 	status();
+	
+	if (m_feature_level >= 3 && (m_update_count % 50) == 0)
+	{
+		expansion_send_diagnostic_status();
+	}
+	
+	//TODO: check if last dispense worked
+	for (int i = 0; i < 15; i++)
+	{
+		if (m_dispensed_value >= m_value_to_dispense)
+		{
+			m_dispensed_value = 0;
+			m_value_to_dispense = 0;
+			break;
+		}
+		poll();
+		if(m_feature_level >= 3)
+			expansion_payout_status();
+		delay(1000);
+		if (i == 14)
+			m_serial->println("Dispense failed");
+	}
+	
 	change = 0;
-
 	for (int i = 0; i < 16; i++)
 	{
 		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 	}
 	
 	type(); // TODO: disable some coins when change is low
+	
+	m_update_count++;
 	if (change == 0)
 		return false;
 	return true; 
@@ -61,6 +90,8 @@ bool CoinChanger::Update(unsigned long &change)
 
 bool CoinChanger::Reset()
 {
+	//m_logging(m_logger, "test", 0);
+	
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
@@ -76,12 +107,12 @@ bool CoinChanger::Reset()
 		m_serial->println(CC_RESET_COMPLETED);
 		return true;
 	}
-	m_serial->println(CC_RESET_FAILED);
+	//m_serial->println(CC_RESET_FAILED);
 	//m_warning(CC_RESET_FAILED);
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
-		Reset();
+		return Reset();
 	}
 	else
 	{
@@ -96,6 +127,7 @@ bool CoinChanger::Reset()
 int CoinChanger::poll()
 {
 	bool reset = false;
+	bool payout_busy = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
@@ -131,43 +163,52 @@ int CoinChanger::poll()
 				m_credit += (m_coin_type_credit[type] * m_coin_scaling_factor);
 			}
 			
+#ifdef MDB_DEBUG
 			//else coin rejected
 			else
 			{
 				m_serial->println("coin rejected");
 			}
+#endif
 			i++; //cause we used 2 bytes
 		}
+#ifdef MDB_DEBUG
 		//slug
 		else if (m_buffer[i] & 0b00100000)
 		{
 			int slug_count = m_buffer[i] & 0b00011111;
 			m_serial->println("slug");
 		}
+#endif
 		//status
 		else
 		{
 			switch (m_buffer[i])
 			{
+#ifdef MDB_DEBUG
 			case 1:
 				//escrow request
 				m_serial->println("escrow request");
+				//TODO: handle dispense here?
 				break;
+#endif				
 			case 2:
 				//changer payout busy
 				m_serial->println("changer payout busy");
+				payout_busy = true;
 				break;
+#ifdef MDB_DEBUG
 			case 3:
 				//no credit
 				m_serial->println("no credit");
 				break;
-				
+#endif
 			case 4:
 				//defective tube sensor
 				m_serial->println("defective tube sensor");
 				//m_warning("defective tube sensor");
 				break;
-
+#ifdef MDB_DEBUG
 			case 5:
 				//double arrival
 				m_serial->println("double arrival");
@@ -192,13 +233,13 @@ int CoinChanger::poll()
 				//changer busy
 				m_serial->println("changer busy");
 				break;
-			
+#endif
 			case 11:
 				//changer was reset
 				m_serial->println("JUST RESET");
 				reset = true;
 				break;
-				
+#ifdef MDB_DEBUG
 			case 12:
 				//coin jam
 				m_serial->println("coin jam");
@@ -211,11 +252,14 @@ int CoinChanger::poll()
 				m_serial->println("default");
 				for ( ; i < m_count; i++)
 					m_serial->println(m_buffer[i]);
+#endif
 			}
 		}
 	}
 	if (reset)
 		return JUST_RESET;
+	if (payout_busy)
+		poll();
 	return 1;
 }
 
@@ -223,86 +267,35 @@ bool CoinChanger::Dispense(unsigned long value)
 {
 	if (m_alternative_payout_supported)
 	{
+		m_value_to_dispense += value;
 		char val = value / m_coin_scaling_factor;
 		expansion_payout(val);
+		return true;
 	}
 	else
 	{
-		//TODO: do this in for loop with  m_coin_type_credit[i]
-		int num_2e = value / 200;
-		num_2e = min(num_2e, m_tube_status[TUBE_2E]); 
-		if (Dispense(TUBE_2E, num_2e))
-			value -= num_2e * 200;
-		
-		int num_1e = value / 100;
-		num_1e = min(num_1e, m_tube_status[TUBE_1E]);
-		if (Dispense(TUBE_1E, num_1e))
-			value -= num_1e * 100;
-		
-		int num_50c = value / 50;
-		num_50c = min(num_50c, m_tube_status[TUBE_50c]);
-		if (Dispense(TUBE_50c, num_50c))
-			value -= num_50c * 50;
-		
-		int num_20c = value / 20;
-		num_20c = min(num_20c, m_tube_status[TUBE_20c]);
-		if (Dispense(TUBE_20c, num_20c))
-			value -= num_20c * 20;
-		
-		int num_10c = value / 10;
-		num_10c = min(num_10c, m_tube_status[TUBE_10c]);
-		if (Dispense(TUBE_10c, num_10c))
-			value -= num_10c * 10;
-		
-		int num_5c = value / 5;
-		num_5c = min(num_5c, m_tube_status[TUBE_5c]);
-		if (Dispense(TUBE_5c, num_5c))
-			value -= num_5c * 5;
-		
-		//check if we can dispense some other coins, eg no 5c available
-		if (value > 0) 
+		for (int i = 15; i >= 0; i--)
 		{
-			if (value < 5) //no 1c and 2c available in CC
+			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
+			count = min(count, m_tube_status[i]); //check if sufficient coins in tube
+			if (Dispense(i, count))
 			{
-				if (m_tube_status[TUBE_5c] > 0)
-					if (Dispense(TUBE_5c, 1))
-						value = 0;
-			}
-			else if (value < 10)
-			{
-				if (m_tube_status[TUBE_10c] > 0)
-					if (Dispense(TUBE_10c, 1))
-						value = 0;
-			}
-			else if (value < 20)
-			{
-				if (m_tube_status[TUBE_20c] > 0)
-					if (Dispense(TUBE_20c, 1))
-						value = 0;
-			}
-			else if (value < 50)
-			{
-				if (m_tube_status[TUBE_50c] > 0)
-					if (Dispense(TUBE_50c, 1))
-						value = 0;
-			}
-			else if (value < 100)
-			{
-				if (m_tube_status[TUBE_1E] > 0)
-					if (Dispense(TUBE_1E, 1))
-						value = 0;
-			}
-			else if (value < 200)
-			{
-				if (m_tube_status[TUBE_2E] > 0)
-					if (Dispense(TUBE_2E, 1))
-						value = 0;
+				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
+				m_value_to_dispense += val;
+				value -= val;
 			}
 		}
-					
-		if (value > 0)  //too less coins in CC to dispense change
-			return false; //maybe return bill from bill validator?
-		return true;
+		
+		if (value == 0)
+			return true;
+		
+		if (value < 5)
+			value = 5;
+		else 
+			value++;
+		
+		//possible deadloop
+		return Dispense(value);
 	}
 }
 
@@ -405,7 +398,9 @@ void CoinChanger::setup()
 			expansion_identification();
 			expansion_feature_enable(m_optional_features);
 		}
+#ifdef MDB_DEBUG
 		m_serial->println("CC: setup complete");
+#endif
 		return;
 	}
 	delay(50);
@@ -488,9 +483,8 @@ void CoinChanger::expansion_identification()
 		}
 		return;
 	}
-
-	expansion_identification();
 	m_serial->println(CC_EXP_ID_ERROR);
+	expansion_identification();
 	//m_warning(CC_EXP_ID_ERROR);
 }
 
@@ -503,4 +497,204 @@ void CoinChanger::expansion_feature_enable(int features)
 void CoinChanger::expansion_payout(int value)
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &value, 1);
+}
+
+//number of each coin dispensed since last alternative payout (expansion_payout)
+//-> response to alternative payout (expansion_payout)
+//changer clears output data after an ack from controller
+void CoinChanger::expansion_payout_status()
+{
+	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_STATUS);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	m_mdb->Ack();
+	if (answer == ACK) //payout busy
+	{
+		//return 1;
+	}
+	if (answer > 0 && m_count == 16)
+	{
+		for (int i = 0; i < 16; i++)
+		{
+			int count = m_buffer[i];
+			m_dispensed_value += m_coin_type_credit[i] * m_coin_scaling_factor * count;
+		}
+	}
+}
+
+//scaled value that indicates the amount of change payd out since last poll or
+//after the initial alternative_payout
+long CoinChanger::expansion_payout_value_poll()
+{
+	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_VALUE_POLL);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 1);
+	if (answer == ACK) //payout finished 
+		expansion_payout_status();
+	else if (answer > 0 && m_count == 1)
+	{
+		return m_buffer[0];
+	}
+	return 0;
+}
+
+//should be send by the vmc every 1-10 seconds
+void CoinChanger::expansion_send_diagnostic_status()
+{
+	m_mdb->SendCommand(ADDRESS, EXPANSION, SEND_DIAGNOSTIC_STATUS);
+	m_mdb->Ack();
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
+	if (answer > 0 && m_count == 2)
+	{
+#ifdef MDB_DEBUG
+		String first = String(m_buffer[0]);
+		String msg = String(first + m_buffer[1]);
+		//m_warning(msg);
+		
+#elif
+		switch (m_buffer[0])
+		{
+		case 1:
+			m_warning("powering up");
+			break;
+		case 2:
+			m_warning("powering down");
+			break;
+		case 3:
+			m_warning("OK");
+			break;
+		case 4:
+			m_warning("Keypad shifted");
+			break;
+			
+		case 5:
+			switch (m_buffer[1])
+			{
+			case 10:
+				m_warning("manual fill / payout active");
+				break;
+			case 20:
+				m_warning("new inventory information available");
+				break;
+			}
+			break;
+			
+		case 6:
+			m_warning("inhibited by VMC");
+			break;
+			
+		case 10:
+			switch(m_buffer[1])
+			{
+			case 0:
+				m_warning("non specific error");
+				break;
+			case 1:
+				m_warning("check sum error #1");
+				break;
+			case 2:
+				m_warning("check sum error #2");
+				break;
+			case 3:
+				m_warning("low line voltage detected");
+				break;
+			}
+			break;
+			
+		case 11:
+			switch(m_buffer[1])
+			{
+				case 0:
+					m_warning("non specific discriminator error");
+					break;
+				case 10:
+					m_warning("flight deck open");
+					break;
+				case 11:
+					m_warning("escrow return stuck open");
+					break;
+				case 30:
+					m_warning("coin jam in sensor");
+					break;
+				case 41:
+					m_warning("discrimination below specified standard");
+					break;
+				case 50:
+					m_warning("validation sensor A out of range");
+					break;
+				case 51:
+					m_warning("validation sensor B out of range");
+					break;
+				case 52:
+					m_warning("validation sensor C out of range");
+					break;
+				case 53:
+					m_warning("operation temperature exceeded");
+					break;
+				case 54:
+					m_warning("sizing optics failure");
+					break;
+			}
+			break;
+		
+		case 12:
+			switch(m_buffer[1])
+			{
+				case 0:
+					m_warning("non specific accept gate error");
+					break;
+				case 30:
+					m_warning("coins entered gate, but did not exit");
+					break;
+				case 31:
+					m_warning("accept gate alarm active");
+					break;
+				case 40:
+					m_warning("accept gate open, but no coin detected");
+					break;
+				case 50:
+					m_warning("post gate sensor covered before gate openend");
+					break;
+			}
+			break;
+		
+		case 13:
+			switch(m_buffer[1])
+			{
+				case 0:
+					m_warning("non specific separator error");
+					break;
+				case 10:
+					m_warning("sort sensor error");
+					break;
+			}
+			break;
+
+		case 14:
+			switch(m_buffer[1])
+			{
+				case 0:
+					m_warning("non specific dispenser error");
+					break;
+			}
+			break;
+			
+		case 15:
+			switch(m_buffer[1])
+			{
+				case 0:
+					m_warning("non specific cassette error");
+					break;
+				case 2:
+					m_warning("cassette removed");
+					break;
+				case 3:
+					m_warning("cash box sensor error");
+					break;
+				case 4:
+					m_warning("sunlight on tube sensors");
+					break;
+			}
+			break;
+		}
+#endif
+	}
 }

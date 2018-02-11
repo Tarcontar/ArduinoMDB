@@ -11,7 +11,7 @@
 #define BV_STACKER_ERROR "BV: STACKER ERROR"
 
 
-BillValidator::BillValidator(MDBSerial &mdb /*, void (*error)(String), void (*warning)(String)*/) : MDBDevice(mdb /*, error, warning*/)
+BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 {
 	ADDRESS = 0x30;
 	SECURITY = 0x02;
@@ -72,11 +72,11 @@ bool BillValidator::Reset()
 		m_serial->println(BV_RESET_COMPLETED);
 		return true;
 	}
-	m_serial->println(BV_RESET_FAILED);
+	//m_serial->println(BV_RESET_FAILED);
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
-		Reset();
+		return Reset();
 	}
 	else
 	{
@@ -84,6 +84,7 @@ bool BillValidator::Reset()
 		m_serial->println(BV_NOT_RESPONDING);
 		return false;
 	}
+	return true;
 }
 
 int BillValidator::poll()

@@ -2,17 +2,15 @@
 
 #include "MDBDevice.hpp"
 
-#define TUBE_2E  5
-#define TUBE_1E  4
-#define TUBE_50c 3
-#define TUBE_20c 2
-#define TUBE_10c 1
-#define TUBE_5c  0
+#define PAYOUT 								0x02
+#define PAYOUT_STATUS 	 				0x03
+#define PAYOUT_VALUE_POLL			0x04
+#define SEND_DIAGNOSTIC_STATUS 	0x05
 
 class CoinChanger : public MDBDevice
 {
 public:
-	CoinChanger(MDBSerial &mdb /*, void (*error)(String) = NULL, void (*warning)(String) = NULL*/);
+	CoinChanger(MDBSerial &mdb);
 
 	//return false if we encounter sth so we cant go on
 	bool Update(unsigned long &change);
@@ -33,7 +31,12 @@ private:
 	void type_new();
 	void expansion_identification();
 	void expansion_feature_enable(int features);
+	
+	//untested below
 	void expansion_payout(int value);
+	void expansion_payout_status(); 
+	long expansion_payout_value_poll();
+	void expansion_send_diagnostic_status();
 
 	int ADDRESS;
 	int STATUS;
@@ -44,6 +47,7 @@ private:
 
 	unsigned long m_credit;
 	
+	unsigned long m_value_to_dispense;
 	unsigned long m_dispensed_value;
 
 	char m_coin_scaling_factor;
@@ -61,4 +65,6 @@ private:
 	bool m_extended_diagnostic_supported;
 	bool m_manual_fill_and_payout_supported;
 	bool m_file_transport_layer_supported;
+	
+	int m_update_count;
 };

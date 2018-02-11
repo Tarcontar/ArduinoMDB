@@ -4,46 +4,44 @@
 #include "SoftwareSerial.h"
 #include <Arduino.h>
 
-#define RESET 0x00
-#define SETUP 0x01
-#define POLL 0x03
-#define TYPE 0x04
-#define EXPANSION 0x07
-#define IDENTIFICATION 0x00
-#define FEATURE_ENABLE 0x01
-#define PAYOUT 0x02
+#define RESET 					0x00
+#define SETUP			 		0x01
+#define POLL 						0x03
+#define TYPE 						0x04
+#define EXPANSION 				0x07
+#define IDENTIFICATION 		0x00
+#define FEATURE_ENABLE 		0x01
 
-#define JUST_RESET 0x0B
-#define NO_RESPONSE 2000
+#define JUST_RESET 		 	0x0B
 
-#define MAX_RESET 10
+#define NO_RESPONSE 		2000
 
-#define SETUP_TIME 200
-#define RESPONSE_TIME 5
+#define MAX_RESET 		10
+
+#define SETUP_TIME 		200
+#define RESPONSE_TIME 	5
 
 class MDBDevice
 {
 public:
 	explicit
-	MDBDevice(MDBSerial &mdb /*, void (*error)(String) = &Error, void (*warning)(String) = &Error */) : m_mdb(&mdb) /*, m_error(error), m_warning(warning)*/ {}
+	MDBDevice(MDBSerial &mdb ) : m_mdb(&mdb) {}
 
 	virtual bool Reset() = 0;
 
 	virtual void Print() = 0;
 	
 	inline void SetSerial(SoftwareSerial &serial) { m_serial = &serial; }
+	inline void SetLoggingFunction(void* obj, void (*logging)(void*, String, int)) { m_logger = obj; m_logging =  logging; }
 	
-private:
-	static void Error(String t);
-
 protected:
 	virtual int poll() = 0;
 	
 	MDBSerial *m_mdb;
 	SoftwareSerial *m_serial;
 	
-	//void (*m_error)(String);
-	//void (*m_warning)(String);
+	void *m_logger;
+	void (*m_logging)(void*, String, int);
 
 	int m_resetCount;
 	
