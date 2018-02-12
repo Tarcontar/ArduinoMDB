@@ -62,7 +62,12 @@ bool BillValidator::Reset()
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if (m_mdb->GetResponse() == ACK)
 	{
-		while (poll() != JUST_RESET); //is possible deadloop
+		int count = 0;
+		while (poll() != JUST_RESET)
+		{
+			if (count > MAX_RESET_POLL) return false;
+			count++;
+		}
 		setup();
 		security();
 		//Expansion(0x00); //ID
@@ -81,7 +86,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-		m_serial->println(BV_NOT_RESPONDING);
+		//m_serial->println(BV_NOT_RESPONDING);
 		return false;
 	}
 	return true;

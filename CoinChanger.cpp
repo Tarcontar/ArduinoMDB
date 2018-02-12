@@ -98,7 +98,7 @@ bool CoinChanger::Reset()
 		int count = 0;
 		while (poll() != JUST_RESET) 
 		{
-			if (count > 10) return false;
+			if (count > MAX_RESET_POLL) return false;
 			count++;
 		}
 		setup();
@@ -117,7 +117,7 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
-		m_serial->println(CC_NOT_RESPONDING);
+		//m_serial->println(CC_NOT_RESPONDING);
 		//m_error(CC_NOT_RESPONDING);
 		return false;
 	}
