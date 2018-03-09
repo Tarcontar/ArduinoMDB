@@ -71,7 +71,7 @@ bool CoinChanger::Update(unsigned long &change)
 			expansion_payout_status();
 		delay(1000);
 		if (i == 14)
-			m_serial->println("Dispense failed");
+			m_uart->println("Dispense failed");
 	}
 	
 	change = 0;
@@ -104,10 +104,10 @@ bool CoinChanger::Reset()
 		setup();
 		status();
 		Print();
-		m_serial->println(CC_RESET_COMPLETED);
+		m_uart->println(CC_RESET_COMPLETED);
 		return true;
 	}
-	//m_serial->println(CC_RESET_FAILED);
+	//m_uart->println(CC_RESET_FAILED);
 	//m_warning(CC_RESET_FAILED);
 	if (m_resetCount < MAX_RESET)
 	{
@@ -117,7 +117,7 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
-		//m_serial->println(CC_NOT_RESPONDING);
+		//m_uart->println(CC_NOT_RESPONDING);
 		//m_error(CC_NOT_RESPONDING);
 		return false;
 	}
@@ -167,7 +167,7 @@ int CoinChanger::poll()
 			//else coin rejected
 			else
 			{
-				m_serial->println("coin rejected");
+				m_uart->println("coin rejected");
 			}
 #endif
 			i++; //cause we used 2 bytes
@@ -177,7 +177,7 @@ int CoinChanger::poll()
 		else if (m_buffer[i] & 0b00100000)
 		{
 			int slug_count = m_buffer[i] & 0b00011111;
-			m_serial->println("slug");
+			m_uart->println("slug");
 		}
 #endif
 		//status
@@ -188,70 +188,70 @@ int CoinChanger::poll()
 #ifdef MDB_DEBUG
 			case 1:
 				//escrow request
-				m_serial->println("escrow request");
+				m_uart->println("escrow request");
 				//TODO: handle dispense here?
 				break;
 #endif				
 			case 2:
 				//changer payout busy
-				m_serial->println("changer payout busy");
+				m_uart->println("changer payout busy");
 				payout_busy = true;
 				break;
 #ifdef MDB_DEBUG
 			case 3:
 				//no credit
-				m_serial->println("no credit");
+				m_uart->println("no credit");
 				break;
 #endif
 			case 4:
 				//defective tube sensor
-				m_serial->println("defective tube sensor");
+				m_uart->println("defective tube sensor");
 				//m_warning("defective tube sensor");
 				break;
 #ifdef MDB_DEBUG
 			case 5:
 				//double arrival
-				m_serial->println("double arrival");
+				m_uart->println("double arrival");
 				break;
 			case 6:
 				//acceptor unplugged
-				m_serial->println("acceptor unplugged");
+				m_uart->println("acceptor unplugged");
 				break;
 			case 7:
 				//tube jam
-				m_serial->println("tube jam");
+				m_uart->println("tube jam");
 				break;
 			case 8:
 				//ROM checksum error
-				m_serial->println("ROM checksum error");
+				m_uart->println("ROM checksum error");
 				break;
 			case 9:
 				//coin routing error
-				m_serial->println("coin routing error");
+				m_uart->println("coin routing error");
 				break;
 			case 10:
 				//changer busy
-				m_serial->println("changer busy");
+				m_uart->println("changer busy");
 				break;
 #endif
 			case 11:
 				//changer was reset
-				m_serial->println("JUST RESET");
+				m_uart->println("JUST RESET");
 				reset = true;
 				break;
 #ifdef MDB_DEBUG
 			case 12:
 				//coin jam
-				m_serial->println("coin jam");
+				m_uart->println("coin jam");
 				break;
 			case 13:
 				//possible credited coin removal
-				m_serial->println("credited coin removal");
+				m_uart->println("credited coin removal");
 				break;
 			default:
-				m_serial->println("default");
+				m_uart->println("default");
 				for ( ; i < m_count; i++)
-					m_serial->println(m_buffer[i]);
+					m_uart->println(m_buffer[i]);
 #endif
 			}
 		}
@@ -305,7 +305,7 @@ bool CoinChanger::Dispense(int coin, int count)
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_serial->println(CC_DISPENSE_FAILED);
+		m_uart->println(CC_DISPENSE_FAILED);
 		//m_warning(CC_DISPENSE_FAILED);
 		return false;
 	}
@@ -315,64 +315,64 @@ bool CoinChanger::Dispense(int coin, int count)
 void CoinChanger::Print()
 {
 #ifdef MDB_DEBUG
-	m_serial->println("## CoinChanger ##");
-	m_serial->print("credit: ");
-	m_serial->println(m_credit);
+	m_uart->println("## CoinChanger ##");
+	m_uart->print("credit: ");
+	m_uart->println(m_credit);
 	
-	m_serial->print("country: ");
-	m_serial->println(m_country);
+	m_uart->print("country: ");
+	m_uart->println(m_country);
 
-	m_serial->print("feature level: ");
-	m_serial->println((int)m_feature_level);
+	m_uart->print("feature level: ");
+	m_uart->println((int)m_feature_level);
 	
-	m_serial->print("coin scaling factor: ");
-	m_serial->println((int)m_coin_scaling_factor);
+	m_uart->print("coin scaling factor: ");
+	m_uart->println((int)m_coin_scaling_factor);
 	
-	m_serial->print("decimal places: ");
-	m_serial->println((int)m_decimal_places);
+	m_uart->print("decimal places: ");
+	m_uart->println((int)m_decimal_places);
 	
-	m_serial->print("coin type routing: ");
-	m_serial->println(m_coin_type_routing);
+	m_uart->print("coin type routing: ");
+	m_uart->println(m_coin_type_routing);
 	
-	m_serial->print("coin type credits: ");
+	m_uart->print("coin type credits: ");
 	for (int i = 0; i < 16; i++)
 	{
-		m_serial->print((int)m_coin_type_credit[i]);
-		m_serial->print(" ");
+		m_uart->print((int)m_coin_type_credit[i]);
+		m_uart->print(" ");
     }
-	m_serial->println();
+	m_uart->println();
 	
-	m_serial->print("tube full status: ");
-	m_serial->println((int)m_tube_full_status);
+	m_uart->print("tube full status: ");
+	m_uart->println((int)m_tube_full_status);
 	
-	m_serial->print("tube status: ");
+	m_uart->print("tube status: ");
 	for (int i = 0; i < 16; i++)
 	{
-		m_serial->print((int)m_tube_status[i]);
-		m_serial->print(" ");
+		m_uart->print((int)m_tube_status[i]);
+		m_uart->print(" ");
     }
-	m_serial->println();
+	m_uart->println();
 	
-	m_serial->print("software version: ");
-	m_serial->println(m_software_version);
+	m_uart->print("software version: ");
+	m_uart->println(m_software_version);
 	
-	m_serial->print("optional features: ");
-	m_serial->println(m_optional_features);
+	m_uart->print("optional features: ");
+	m_uart->println(m_optional_features);
 	
-	m_serial->print("alternative payout supported: ");
-	m_serial->println(m_alternative_payout_supported);
+	m_uart->print("alternative payout supported: ");
+	m_uart->println(m_alternative_payout_supported);
 	
-	m_serial->print("extended diagnostic supported: ");
-	m_serial->println(m_extended_diagnostic_supported);
+	m_uart->print("extended diagnostic supported: ");
+	m_uart->println(m_extended_diagnostic_supported);
 	
-	m_serial->print("mauall fill and payout supported: ");
-	m_serial->println(m_manual_fill_and_payout_supported);
+	m_uart->print("mauall fill and payout supported: ");
+	m_uart->println(m_manual_fill_and_payout_supported);
 	
-	m_serial->print("file transport layer supported: ");
-	m_serial->println(m_file_transport_layer_supported);
+	m_uart->print("file transport layer supported: ");
+	m_uart->println(m_file_transport_layer_supported);
 	
-	m_serial->println("\n######");
-	m_serial->println();
+	m_uart->println("\n######");
+	m_uart->println();
 #endif	
 }
 
@@ -399,12 +399,12 @@ void CoinChanger::setup()
 			expansion_feature_enable(m_optional_features);
 		}
 #ifdef MDB_DEBUG
-		m_serial->println("CC: setup complete");
+		m_uart->println("CC: setup complete");
 #endif
 		return;
 	}
 	delay(50);
-	m_serial->println(CC_SETUP_ERROR);
+	m_uart->println(CC_SETUP_ERROR);
 	//m_warning(CC_SETUP_ERROR);
 	setup();
 }
@@ -424,11 +424,11 @@ void CoinChanger::status()
 			m_tube_status[i] = m_buffer[2 + i];
 		}
 #ifdef MDB_DEBUG
-		m_serial->println("CC: status complete");
+		m_uart->println("CC: status complete");
 #endif
 		return;
 	}
-	m_serial->println(CC_STATUS_ERROR);
+	m_uart->println(CC_STATUS_ERROR);
 	//m_warning(CC_STATUS_ERROR);
 	delay(50);
 	status();
@@ -441,7 +441,7 @@ void CoinChanger::type()
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(CC_TYPE_ERROR);
+		m_uart->println(CC_TYPE_ERROR);
 		//m_warning(CC_TYPE_ERROR);
 		type();
 	}
@@ -483,7 +483,7 @@ void CoinChanger::expansion_identification()
 		}
 		return;
 	}
-	m_serial->println(CC_EXP_ID_ERROR);
+	m_uart->println(CC_EXP_ID_ERROR);
 	expansion_identification();
 	//m_warning(CC_EXP_ID_ERROR);
 }

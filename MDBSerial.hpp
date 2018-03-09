@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include "UART.hpp"
 
 #define MDB_DEBUG TRUE//undefine to minimize code
 
@@ -33,6 +34,9 @@ public:
 
 private:
 	void hardReset();
+	
+private:
+	UART *m_uart;
 };
 
 

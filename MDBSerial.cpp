@@ -1,13 +1,10 @@
 #include "MDBSerial.hpp"
-#include "UART.hpp"
-
-UART *m_uart;
 
 MDBSerial::MDBSerial(uint8_t uart) 
 {
-	m_uart = UART::UART9Bit(uart);
+	m_uart = new UART(uart, true);
 	//hardReset(); //does not work at the moment
-	init();
+	m_uart->begin();
 }
 
 void MDBSerial::hardReset()

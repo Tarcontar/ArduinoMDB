@@ -74,10 +74,10 @@ bool BillValidator::Reset()
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
 		Print();
-		m_serial->println(BV_RESET_COMPLETED);
+		m_uart->println(BV_RESET_COMPLETED);
 		return true;
 	}
-	//m_serial->println(BV_RESET_FAILED);
+	//m_uart->println(BV_RESET_FAILED);
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -86,7 +86,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-		//m_serial->println(BV_NOT_RESPONDING);
+		//m_uart->println(BV_NOT_RESPONDING);
 		return false;
 	}
 	return true;
@@ -121,37 +121,37 @@ int BillValidator::poll()
 			}
 			else if (routing == 1)
 			{
-				//m_serial->println("escrow position");
+				//m_uart->println("escrow position");
 				m_bill_in_escrow = true;
 			}
 			/*
 			else if (routing == 2)
 			{
-				m_serial->println("bill returned");
+				m_uart->println("bill returned");
 			}
 			else if (routing == 3)
 			{
-				m_serial->println("bill to recycler");
+				m_uart->println("bill to recycler");
 			}
 			else if (routing == 4)
 			{
-				m_serial->println("disabled bill rejected");
+				m_uart->println("disabled bill rejected");
 			}
 			else if (routing == 5)
 			{
-				m_serial->println("bill to recycler - manual fill");
+				m_uart->println("bill to recycler - manual fill");
 			}
 			else if (routing == 6)
 			{
-				m_serial->println("manual dispense");
+				m_uart->println("manual dispense");
 			}
 			else if (routing == 7)
 			{
-				m_serial->println("transferred from recycler to cashbox");
+				m_uart->println("transferred from recycler to cashbox");
 			}
 			*/
 			/*else
-				m_serial->println("routing error");*/
+				m_uart->println("routing error");*/
 		}
 		// number of input attempts while validator is disabled
 		else if (m_buffer[i] & 0b01000000)
@@ -165,45 +165,45 @@ int BillValidator::poll()
 			switch (val)
 			{
 			case 1:
-				//m_serial->println("escrow request");
+				//m_uart->println("escrow request");
 				break;
 			case 2:
-				//m_serial->println("payout busy");
+				//m_uart->println("payout busy");
 				break;
 			case 3:
-				//m_serial->println("dispenser busy");
+				//m_uart->println("dispenser busy");
 				break;
 			case 4:
-				//m_serial->println("defective dispenser sensor");
+				//m_uart->println("defective dispenser sensor");
 				break;
 			case 5:
-				//m_serial->println("not used");
+				//m_uart->println("not used");
 				break;
 			case 6:
-				//m_serial->println("dispenser did not start / motor problem");
+				//m_uart->println("dispenser did not start / motor problem");
 				break;
 			case 7:
-				//m_serial->println("dispenser jam");
+				//m_uart->println("dispenser jam");
 				break;
 			case 8:
-				//m_serial->println("ROM checksum error");
+				//m_uart->println("ROM checksum error");
 				break;
 			case 9:
-				//m_serial->println("dispenser disabled");
+				//m_uart->println("dispenser disabled");
 				break;
 			case 10:
-				//m_serial->println("bill waiting");
+				//m_uart->println("bill waiting");
 				break;
 			case 11: //unused
 			case 12: //unused
 			case 13: //unused
 			case 14: //unused
 			case 15:
-				//m_serial->println("filled key pressed");
+				//m_uart->println("filled key pressed");
 				break;
 			/*
 			default:
-				m_serial->println("default bill rec");
+				m_uart->println("default bill rec");
 			*/
 			}
 		}
@@ -214,55 +214,55 @@ int BillValidator::poll()
 			{
 			case 1:
 				//defective motor
-				//m_serial->println(F("defective motor"));
+				//m_uart->println(F("defective motor"));
 				break;
 			case 2:
 				//sensor problem
-				//m_serial->println(F"sensor problem"));
+				//m_uart->println(F"sensor problem"));
 				break;
 			case 3:
 				//validator busy
-				//m_serial->println(F("validator busy"));
+				//m_uart->println(F("validator busy"));
 				break;
 			case 4:
 				//ROM Checksum Error
-				//m_serial->println("ROM Checksum error");
+				//m_uart->println("ROM Checksum error");
 				break;
 			case 5:
 				//Validator jammed
-				//m_serial->println("validator jammed");
+				//m_uart->println("validator jammed");
 				break;
 			case 6:
 				//validator was reset
-				//m_serial->println("just reset");
+				//m_uart->println("just reset");
 				reset = true;
 				break;
 			case 7:
 				//bill removed
-				//m_serial->println("bill removed");
+				//m_uart->println("bill removed");
 				break;
 			case 8:
 				//cash box out of position
-				//m_serial->println("cash box out of position");
+				//m_uart->println("cash box out of position");
 				break;
 			case 9:
 				//validator disabled
-				//m_serial->println(F("validator disabled"));
+				//m_uart->println(F("validator disabled"));
 				break;
 			case 10:
 				//invalid escrow request
-				//m_serial->println("invalid escrow request");
+				//m_uart->println("invalid escrow request");
 				break;
 			case 11:
 				//bill rejected
-				//m_serial->println("bill rejected");
+				//m_uart->println("bill rejected");
 				break;
 			case 12:
 				//possible credited bill removal
-				//m_serial->println("possible credited bill removal");
+				//m_uart->println("possible credited bill removal");
 				break;
 			/*default:
-				m_serial->println("default");*/
+				m_uart->println("default");*/
 			}
 		}
 	}
@@ -279,7 +279,7 @@ void BillValidator::security()
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(BV_SECURITY_FAILED);
+		m_uart->println(BV_SECURITY_FAILED);
 		security();
 	}
 }
@@ -287,25 +287,25 @@ void BillValidator::security()
 void BillValidator::Print()
 {
 	/*
-	m_serial->println(F("BILL VALIDATOR: "));
-	m_serial->print(F(" credit: "));
-	m_serial->print(m_credit);
-	m_serial->print(F("\n full: "));
-	m_serial->print((bool)m_full);
-	m_serial->print(F("\n bills in stacker: "));
-	m_serial->print(m_bills_in_stacker);
-	m_serial->print(F("\n feature level: "));
-	m_serial->print((int)m_feature_level);
-	m_serial->print(F("\n bill scaling factor: "));
-	m_serial->print((int)m_bill_scaling_factor);
-	m_serial->print(F("\n decimal places: "));
-	m_serial->print((int)m_decimal_places);
-	m_serial->print(F("\n capacity: "));
-	m_serial->print(m_stacker_capacity);
-	m_serial->print(F("\n security levels: "));
-	m_serial->print(m_security_levels);
+	m_uart->println(F("BILL VALIDATOR: "));
+	m_uart->print(F(" credit: "));
+	m_uart->print(m_credit);
+	m_uart->print(F("\n full: "));
+	m_uart->print((bool)m_full);
+	m_uart->print(F("\n bills in stacker: "));
+	m_uart->print(m_bills_in_stacker);
+	m_uart->print(F("\n feature level: "));
+	m_uart->print((int)m_feature_level);
+	m_uart->print(F("\n bill scaling factor: "));
+	m_uart->print((int)m_bill_scaling_factor);
+	m_uart->print(F("\n decimal places: "));
+	m_uart->print((int)m_decimal_places);
+	m_uart->print(F("\n capacity: "));
+	m_uart->print(m_stacker_capacity);
+	m_uart->print(F("\n security levels: "));
+	m_uart->print(m_security_levels);
 	
-	m_serial->println(F("\n###"));
+	m_uart->println(F("\n###"));
 	*/
 }
 
@@ -335,7 +335,7 @@ void BillValidator::setup()
 	}
 	
 	delay(50);
-	m_serial->println(BV_SETUP_ERROR);
+	m_uart->println(BV_SETUP_ERROR);
 	setup();
 }
 
@@ -346,7 +346,7 @@ void BillValidator::type(int bills[])
 	if (m_mdb->GetResponse() != ACK)
 	{
 		delay(50);
-		m_serial->println(BV_TYPE_ERROR);
+		m_uart->println(BV_TYPE_ERROR);
 		type(bills);
 	}
 }
@@ -360,7 +360,7 @@ void BillValidator::escrow(bool accept)
 	delay(10);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_serial->println(BV_ESCROW_ERROR);
+		m_uart->println(BV_ESCROW_ERROR);
 		delay(50);
 		escrow(accept);
 	}
@@ -384,10 +384,10 @@ void BillValidator::stacker()
 		else
 			m_full = false;
 		m_bills_in_stacker = m_buffer[0] & 0b01111111;
-		//m_serial->println(F("stacker ready"));
+		//m_uart->println(F("stacker ready"));
 		return;
 	}
-	m_serial->println(BV_STACKER_ERROR);
+	m_uart->println(BV_STACKER_ERROR);
 	delay(50);
 	stacker();
 }
