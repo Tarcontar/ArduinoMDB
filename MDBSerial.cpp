@@ -2,9 +2,13 @@
 
 MDBSerial::MDBSerial(uint8_t uart) 
 {
-	m_uart = new UART(uart, true);
+	m_uart = new UART(uart);
+}
+
+bool MDBSerial::begin()
+{
 	//hardReset(); //does not work at the moment
-	m_uart->begin();
+	return m_uart->begin(9600, true);
 }
 
 void MDBSerial::hardReset()
@@ -42,6 +46,7 @@ void MDBSerial::SendCommand(int address, int cmd, int *data, int dataCount)
 void MDBSerial::SendCommand(int address, int cmd,  int subCmd, int *data, int dataCount)
 {
 	char sum = 0;
+	m_uart->flush();
 	m_uart->write9bit(address | cmd | 0x100);
 	sum += address | cmd;
 	
@@ -87,19 +92,23 @@ int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 	//nothing received
 	if (!m_uart->available())
 		return -2;
- 
+	
+	int c = 0;
 	while (m_uart->available())
 	{
-		int val = m_uart->read();
-		if (val & 0x100)
+		int resp = m_uart->read();
+		char val = resp;
+		if (resp & 0x100)
 		{
-			if (*count == 1) //we got an ACK //or NAK or RET??
+			if (c == 0) //we got an ACK //or NAK or RET??
 			{
 				m_uart->flush();
-				if (val == ACK)
+				if (resp == ACK)
 					return ACK;
-				else if (val == NAK)
+				else if (resp == NAK)
 					return -4;
+				else
+					return -5;
 			}
 			else //checksum of data
 			{
@@ -112,10 +121,11 @@ int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 		}
 		else
 		{
-			data[(*count)++] = val;
+			data[c++] = val;
 			sum += val;
 		}
 	}
+	*count = c;
 	m_uart->flush();
 	return 1;
 }

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "UART.hpp"
 
-#define MDB_DEBUG TRUE//undefine to minimize code
+//#define MDB_DEBUG //undefine to minimize code
 
 //MDB specific stuff
 #define DATA_MAX 36
@@ -24,13 +24,15 @@ class MDBSerial
 public:
 	MDBSerial(uint8_t uart = 0);
 	
+	bool begin();
+	
 	void Ack();
 	void Nak();
 	void Ret();
 
 	void SendCommand(int address, int cmd, int *data, int dataCount);
 	void SendCommand(int address, int cmd, int subCmd = -1, int *data = 0, int dataCount = 0);
-	int GetResponse(char data[] = 0, int *count = 0, int num_bytes = 0);
+	int GetResponse(char data[] = 0, int *count = 0, int num_bytes = 1);
 
 private:
 	void hardReset();

@@ -6,21 +6,25 @@
 
 #define RESET 					0x00
 #define SETUP			 		0x01
-#define POLL 						0x03
-#define TYPE 						0x04
+#define POLL 					0x03
+#define TYPE 					0x04
 #define EXPANSION 				0x07
-#define IDENTIFICATION 		0x00
-#define FEATURE_ENABLE 		0x01
+#define IDENTIFICATION 			0x00
+#define FEATURE_ENABLE 			0x01
 
-#define JUST_RESET 		 	0x0B
+#define JUST_RESET 		 		0x0B
 
-#define NO_RESPONSE 		2000
+#define NO_RESPONSE 			2000
 
-#define MAX_RESET 		5
-#define MAX_RESET_POLL 5
+#define MAX_RESET 				5
+#define MAX_RESET_POLL 			15
 
-#define SETUP_TIME 		200
-#define RESPONSE_TIME 	5
+#define SETUP_TIME 				200
+#define RESPONSE_TIME 			5
+
+#define WARNING					1
+#define ERROR					2
+#define SEVERE					3
 
 class MDBDevice
 {
@@ -42,7 +46,7 @@ protected:
 	UART *m_uart;
 	
 	void *m_logger;
-	void (*m_logging)(void*, String, int);
+	void (*m_logging)(void*, String, int val);
 
 	int m_resetCount;
 	

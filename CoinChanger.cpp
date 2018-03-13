@@ -1,15 +1,6 @@
 #include "CoinChanger.hpp"
 #include <Arduino.h>
 
-#define CC_RESET_COMPLETED "CC: RESET COMPLETED"
-#define CC_RESET_FAILED "CC: RESET FAILED"
-#define CC_NOT_RESPONDING "CC: NOT RESPONDING"
-#define CC_DISPENSE_FAILED "CC: DISPENSE FAILED"
-#define CC_SETUP_ERROR "CC: SETUP ERROR"
-#define CC_STATUS_ERROR "CC: STATUS ERROR"
-#define CC_TYPE_ERROR "CC: TYPE ERROR"
-#define CC_EXP_ID_ERROR "CC: EXP ID ERROR"
-
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
 	ADDRESS = 0x08;
@@ -47,7 +38,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_dispensed_value = 0;
 }
 
-bool CoinChanger::Update(unsigned long &change)
+bool CoinChanger::Update(unsigned long &change, int it)
 {
 	poll();
 	status();
@@ -57,21 +48,20 @@ bool CoinChanger::Update(unsigned long &change)
 		expansion_send_diagnostic_status();
 	}
 	
-	//TODO: check if last dispense worked
-	for (int i = 0; i < 15; i++)
+	if(m_feature_level >= 3)
+		expansion_payout_status();
+	
+	if (m_dispensed_value >= m_value_to_dispense)
 	{
-		if (m_dispensed_value >= m_value_to_dispense)
-		{
-			m_dispensed_value = 0;
-			m_value_to_dispense = 0;
-			break;
-		}
-		poll();
-		if(m_feature_level >= 3)
-			expansion_payout_status();
+		m_dispensed_value = 0;
+		m_value_to_dispense = 0;
+	}
+	else
+	{
+		m_logging(m_logger, "CC: DISPENSE FAILED", SEVERE);
+		//DisplayError();
 		delay(1000);
-		if (i == 14)
-			m_uart->println("Dispense failed");
+		return false;
 	}
 	
 	change = 0;
@@ -80,18 +70,14 @@ bool CoinChanger::Update(unsigned long &change)
 		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 	}
 	
-	type(); // TODO: disable some coins when change is low
+	type();
 	
 	m_update_count++;
-	if (change == 0)
-		return false;
 	return true; 
 }
 
 bool CoinChanger::Reset()
 {
-	//m_logging(m_logger, "test", 0);
-	
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
@@ -101,14 +87,18 @@ bool CoinChanger::Reset()
 			if (count > MAX_RESET_POLL) return false;
 			count++;
 		}
-		setup();
+		if (!setup())
+			return false;
 		status();
+#ifdef MDB_DEBUG
 		Print();
-		m_uart->println(CC_RESET_COMPLETED);
+		m_uart->println(F("CC: RESET COMPLETED"));
+#endif
 		return true;
 	}
-	//m_uart->println(CC_RESET_FAILED);
-	//m_warning(CC_RESET_FAILED);
+#ifdef MDB_DEBUG
+	m_uart->println(F("CC: RESET FAILED"));
+#endif
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -117,11 +107,126 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
-		//m_uart->println(CC_NOT_RESPONDING);
-		//m_error(CC_NOT_RESPONDING);
+#ifdef MDB_DEBUG
+		m_logging(m_logger, "CC: NOT RESPONDING", ERROR);
+#endif
 		return false;
 	}
 	return true;
+}
+
+
+bool CoinChanger::Dispense(unsigned long value)
+{
+	if (m_alternative_payout_supported)
+	{
+		m_value_to_dispense += value;
+		char val = value / m_coin_scaling_factor;
+		expansion_payout(val);
+		return true;
+	}
+	else
+	{
+		m_logging(m_logger, "CC: OLD DISPENSE USED", WARNING);
+		for (int i = 15; i >= 0; i--)
+		{
+			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
+			count = min(count, m_tube_status[i]); //check if sufficient coins in tube
+			if (Dispense(i, count))
+			{
+				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
+				m_value_to_dispense += val;
+				value -= val;
+			}
+		}
+		
+		if (value == 0)
+			return true;
+		
+		if (value < 5)
+			value = 5;
+		else 
+			value++;
+		
+		//possible deadloop
+		return Dispense(value);
+	}
+}
+
+bool CoinChanger::Dispense(int coin, int count)
+{
+	int out = (count << 4) | coin;
+	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		m_logging(m_logger, "CC: DISPENSE FAILED", WARNING);
+		return false;
+	}
+	return true;
+}
+
+void CoinChanger::Print()
+{
+#ifdef MDB_DEBUG
+	m_uart->println(F("## CoinChanger ##"));
+	m_uart->print(F("credit: "));
+	m_uart->println(m_credit);
+	
+	m_uart->print(F("country: "));
+	m_uart->println(m_country);
+
+	m_uart->print(F("feature level: "));
+	m_uart->println((int)m_feature_level);
+	
+	m_uart->print(F("coin scaling factor: "));
+	m_uart->println((int)m_coin_scaling_factor);
+	
+	m_uart->print(F("decimal places: "));
+	m_uart->println((int)m_decimal_places);
+	
+	m_uart->print(F("coin type routing: "));
+	m_uart->println(m_coin_type_routing);
+	
+	m_uart->print(F("coin type credits: "));
+	for (int i = 0; i < 16; i++)
+	{
+		m_uart->print((int)m_coin_type_credit[i]);
+		m_uart->print(" ");
+    }
+	m_uart->println();
+	
+	m_uart->print(F("tube full status: "));
+	m_uart->println((int)m_tube_full_status);
+	
+	m_uart->print(F("tube status: "));
+	for (int i = 0; i < 16; i++)
+	{
+		m_uart->print((int)m_tube_status[i]);
+		m_uart->print(" ");
+    }
+	m_uart->println();
+	
+	m_uart->print(F("software version: "));
+	m_uart->println(m_software_version);
+	
+	m_uart->print(F("optional features: "));
+	m_uart->println(m_optional_features);
+	
+	m_uart->print(F("alternative payout supported: "));
+	m_uart->println((bool)m_alternative_payout_supported);
+	
+	m_uart->print(F("extended diagnostic supported: "));
+	m_uart->println((bool)m_extended_diagnostic_supported);
+	
+	m_uart->print(F("mauall fill and payout supported: "));
+	m_uart->println((bool)m_manual_fill_and_payout_supported);
+	
+	m_uart->print(F("file transport layer supported: "));
+	m_uart->println((bool)m_file_transport_layer_supported);
+	
+	m_uart->println(F("\n######"));
+	m_uart->println();
+#endif	
 }
 
 int CoinChanger::poll()
@@ -205,7 +310,7 @@ int CoinChanger::poll()
 #endif
 			case 4:
 				//defective tube sensor
-				m_uart->println("defective tube sensor");
+				m_logging(m_logger, "CC: defective tube sensor", WARNING);
 				//m_warning("defective tube sensor");
 				break;
 #ifdef MDB_DEBUG
@@ -221,10 +326,12 @@ int CoinChanger::poll()
 				//tube jam
 				m_uart->println("tube jam");
 				break;
+#endif
 			case 8:
 				//ROM checksum error
-				m_uart->println("ROM checksum error");
+				m_logging(m_logger, "CC: ROM checksum error", WARNING);
 				break;
+#ifdef MDB_DEBUG
 			case 9:
 				//coin routing error
 				m_uart->println("coin routing error");
@@ -236,7 +343,7 @@ int CoinChanger::poll()
 #endif
 			case 11:
 				//changer was reset
-				m_uart->println("JUST RESET");
+				//m_uart->println("JUST RESET");
 				reset = true;
 				break;
 #ifdef MDB_DEBUG
@@ -259,124 +366,14 @@ int CoinChanger::poll()
 	if (reset)
 		return JUST_RESET;
 	if (payout_busy)
-		poll();
+	{
+		delay(2000);
+		return poll();
+	}
 	return 1;
 }
 
-bool CoinChanger::Dispense(unsigned long value)
-{
-	if (m_alternative_payout_supported)
-	{
-		m_value_to_dispense += value;
-		char val = value / m_coin_scaling_factor;
-		expansion_payout(val);
-		return true;
-	}
-	else
-	{
-		for (int i = 15; i >= 0; i--)
-		{
-			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
-			count = min(count, m_tube_status[i]); //check if sufficient coins in tube
-			if (Dispense(i, count))
-			{
-				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
-				m_value_to_dispense += val;
-				value -= val;
-			}
-		}
-		
-		if (value == 0)
-			return true;
-		
-		if (value < 5)
-			value = 5;
-		else 
-			value++;
-		
-		//possible deadloop
-		return Dispense(value);
-	}
-}
-
-bool CoinChanger::Dispense(int coin, int count)
-{
-	int out = (count << 4) | coin;
-	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
-	if (m_mdb->GetResponse() != ACK)
-	{
-		m_uart->println(CC_DISPENSE_FAILED);
-		//m_warning(CC_DISPENSE_FAILED);
-		return false;
-	}
-	return true;
-}
-
-void CoinChanger::Print()
-{
-#ifdef MDB_DEBUG
-	m_uart->println("## CoinChanger ##");
-	m_uart->print("credit: ");
-	m_uart->println(m_credit);
-	
-	m_uart->print("country: ");
-	m_uart->println(m_country);
-
-	m_uart->print("feature level: ");
-	m_uart->println((int)m_feature_level);
-	
-	m_uart->print("coin scaling factor: ");
-	m_uart->println((int)m_coin_scaling_factor);
-	
-	m_uart->print("decimal places: ");
-	m_uart->println((int)m_decimal_places);
-	
-	m_uart->print("coin type routing: ");
-	m_uart->println(m_coin_type_routing);
-	
-	m_uart->print("coin type credits: ");
-	for (int i = 0; i < 16; i++)
-	{
-		m_uart->print((int)m_coin_type_credit[i]);
-		m_uart->print(" ");
-    }
-	m_uart->println();
-	
-	m_uart->print("tube full status: ");
-	m_uart->println((int)m_tube_full_status);
-	
-	m_uart->print("tube status: ");
-	for (int i = 0; i < 16; i++)
-	{
-		m_uart->print((int)m_tube_status[i]);
-		m_uart->print(" ");
-    }
-	m_uart->println();
-	
-	m_uart->print("software version: ");
-	m_uart->println(m_software_version);
-	
-	m_uart->print("optional features: ");
-	m_uart->println(m_optional_features);
-	
-	m_uart->print("alternative payout supported: ");
-	m_uart->println(m_alternative_payout_supported);
-	
-	m_uart->print("extended diagnostic supported: ");
-	m_uart->println(m_extended_diagnostic_supported);
-	
-	m_uart->print("mauall fill and payout supported: ");
-	m_uart->println(m_manual_fill_and_payout_supported);
-	
-	m_uart->print("file transport layer supported: ");
-	m_uart->println(m_file_transport_layer_supported);
-	
-	m_uart->println("\n######");
-	m_uart->println();
-#endif	
-}
-
-void CoinChanger::setup()
+bool CoinChanger::setup(int it)
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	m_mdb->Ack();
@@ -399,17 +396,20 @@ void CoinChanger::setup()
 			expansion_feature_enable(m_optional_features);
 		}
 #ifdef MDB_DEBUG
-		m_uart->println("CC: setup complete");
+		m_uart->println(F("CC: SETUP complete"));
 #endif
-		return;
+		return true;
 	}
-	delay(50);
-	m_uart->println(CC_SETUP_ERROR);
-	//m_warning(CC_SETUP_ERROR);
-	setup();
+	if (it < 5)
+	{
+		delay(50);
+		return setup(++it);
+	}
+	m_logging(m_logger, "CC: SETUP ERROR", ERROR);
+	return false;
 }
 
-void CoinChanger::status()
+void CoinChanger::status(int it)
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
 	m_mdb->Ack();
@@ -424,30 +424,34 @@ void CoinChanger::status()
 			m_tube_status[i] = m_buffer[2 + i];
 		}
 #ifdef MDB_DEBUG
-		m_uart->println("CC: status complete");
+		m_uart->println(F("CC: STATUS complete"));
 #endif
 		return;
 	}
-	m_uart->println(CC_STATUS_ERROR);
-	//m_warning(CC_STATUS_ERROR);
-	delay(50);
-	status();
+	if (it < 5)
+	{
+		delay(50);
+		return status(++it);
+	}
+	m_logging(m_logger, "CC: STATUS ERROR", WARNING);
 }
 
-void CoinChanger::type()
+void CoinChanger::type(int it)
 {
 	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		delay(50);
-		m_uart->println(CC_TYPE_ERROR);
-		//m_warning(CC_TYPE_ERROR);
-		type();
+		if (it < 5)
+		{
+			delay(50);
+			return type(++it);
+		}
+		m_logging(m_logger, "CC: TYPE ERROR", ERROR);
 	}
 }
 
-void CoinChanger::expansion_identification()
+void CoinChanger::expansion_identification(int it)
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION, IDENTIFICATION);
 	m_mdb->Ack();
@@ -483,9 +487,12 @@ void CoinChanger::expansion_identification()
 		}
 		return;
 	}
-	m_uart->println(CC_EXP_ID_ERROR);
-	expansion_identification();
-	//m_warning(CC_EXP_ID_ERROR);
+	if (it < 5)
+	{
+		delay(50);
+		expansion_identification(++it);
+	}
+	m_logging(m_logger, "CC: EXP ID ERROR", ERROR);
 }
 
 void CoinChanger::expansion_feature_enable(int features)
@@ -502,16 +509,21 @@ void CoinChanger::expansion_payout(int value)
 //number of each coin dispensed since last alternative payout (expansion_payout)
 //-> response to alternative payout (expansion_payout)
 //changer clears output data after an ack from controller
-void CoinChanger::expansion_payout_status()
+void CoinChanger::expansion_payout_status(int it)
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_STATUS);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
 	m_mdb->Ack();
 	if (answer == ACK) //payout busy
 	{
-		//return 1;
+		if (it < 5)
+		{	
+			delay(500);
+			expansion_payout_status(it++);
+		}
+		return;
 	}
-	if (answer > 0 && m_count == 16)
+	else if (answer > 0 && m_count == 16)
 	{
 		for (int i = 0; i < 16; i++)
 		{
@@ -543,58 +555,52 @@ void CoinChanger::expansion_send_diagnostic_status()
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
 	if (answer > 0 && m_count == 2)
-	{
-#ifdef MDB_DEBUG
-		String first = String(m_buffer[0]);
-		String msg = String(first + m_buffer[1]);
-		//m_warning(msg);
-		
-#elif
+	{		
 		switch (m_buffer[0])
 		{
 		case 1:
-			m_warning("powering up");
+			//("CC: powering up");
 			break;
 		case 2:
-			m_warning("powering down");
+			//("CC: powering down");
 			break;
 		case 3:
-			m_warning("OK");
+			//("CC: OK");
 			break;
 		case 4:
-			m_warning("Keypad shifted");
+			//("CC: Keypad shifted");
 			break;
 			
 		case 5:
 			switch (m_buffer[1])
 			{
 			case 10:
-				m_warning("manual fill / payout active");
+				//("CC: manual fill / payout active");
 				break;
 			case 20:
-				m_warning("new inventory information available");
+				//("CC: new inventory information available");
 				break;
 			}
 			break;
 			
 		case 6:
-			m_warning("inhibited by VMC");
+			//("CC: inhibited by VMC");
 			break;
 			
 		case 10:
 			switch(m_buffer[1])
 			{
 			case 0:
-				m_warning("non specific error");
+				m_logging(m_logger, "CC: non specific error", ERROR);
 				break;
 			case 1:
-				m_warning("check sum error #1");
+				m_logging(m_logger, "CC: check sum error #1", ERROR);
 				break;
 			case 2:
-				m_warning("check sum error #2");
+				m_logging(m_logger, "CC: check sum error #2", ERROR);
 				break;
 			case 3:
-				m_warning("low line voltage detected");
+				m_logging(m_logger, "CC: low line voltage detected", ERROR);
 				break;
 			}
 			break;
@@ -603,34 +609,34 @@ void CoinChanger::expansion_send_diagnostic_status()
 			switch(m_buffer[1])
 			{
 				case 0:
-					m_warning("non specific discriminator error");
+					m_logging(m_logger, "CC: non specific discriminator error", ERROR);
 					break;
 				case 10:
-					m_warning("flight deck open");
+					m_logging(m_logger, "CC: flight deck open", ERROR);
 					break;
 				case 11:
-					m_warning("escrow return stuck open");
+					m_logging(m_logger, "CC: escrow return stuck open", ERROR);
 					break;
 				case 30:
-					m_warning("coin jam in sensor");
+					m_logging(m_logger, "CC: coin jam in sensor", ERROR);
 					break;
 				case 41:
-					m_warning("discrimination below specified standard");
+					m_logging(m_logger, "CC: discrimination below specified standard", ERROR);
 					break;
 				case 50:
-					m_warning("validation sensor A out of range");
+					m_logging(m_logger, "CC: validation sensor A out of range", ERROR);
 					break;
 				case 51:
-					m_warning("validation sensor B out of range");
+					m_logging(m_logger, "CC: validation sensor B out of range", ERROR);
 					break;
 				case 52:
-					m_warning("validation sensor C out of range");
+					m_logging(m_logger, "CC: validation sensor C out of range", ERROR);
 					break;
 				case 53:
-					m_warning("operation temperature exceeded");
+					m_logging(m_logger, "CC: operation temperature exceeded", ERROR);
 					break;
 				case 54:
-					m_warning("sizing optics failure");
+					m_logging(m_logger, "CC: sizing optics failure", ERROR);
 					break;
 			}
 			break;
@@ -639,19 +645,19 @@ void CoinChanger::expansion_send_diagnostic_status()
 			switch(m_buffer[1])
 			{
 				case 0:
-					m_warning("non specific accept gate error");
+					m_logging(m_logger, "CC: non specific accept gate error", ERROR);
 					break;
 				case 30:
-					m_warning("coins entered gate, but did not exit");
+					m_logging(m_logger, "CC: coins entered gate, but did not exit", ERROR);
 					break;
 				case 31:
-					m_warning("accept gate alarm active");
+					m_logging(m_logger, "CC: accept gate alarm active", ERROR);
 					break;
 				case 40:
-					m_warning("accept gate open, but no coin detected");
+					m_logging(m_logger, "CC: accept gate open, but no coin detected", ERROR);
 					break;
 				case 50:
-					m_warning("post gate sensor covered before gate openend");
+					m_logging(m_logger, "CC: post gate sensor covered before gate openend", ERROR);
 					break;
 			}
 			break;
@@ -660,10 +666,10 @@ void CoinChanger::expansion_send_diagnostic_status()
 			switch(m_buffer[1])
 			{
 				case 0:
-					m_warning("non specific separator error");
+					m_logging(m_logger, "CC: non specific separator error", ERROR);
 					break;
 				case 10:
-					m_warning("sort sensor error");
+					m_logging(m_logger, "CC: sort sensor error", ERROR);
 					break;
 			}
 			break;
@@ -672,7 +678,7 @@ void CoinChanger::expansion_send_diagnostic_status()
 			switch(m_buffer[1])
 			{
 				case 0:
-					m_warning("non specific dispenser error");
+					m_logging(m_logger, "CC: non specific dispenser error", ERROR);
 					break;
 			}
 			break;
@@ -681,20 +687,19 @@ void CoinChanger::expansion_send_diagnostic_status()
 			switch(m_buffer[1])
 			{
 				case 0:
-					m_warning("non specific cassette error");
+					m_logging(m_logger, "CC: non specific cassette error", ERROR);
 					break;
 				case 2:
-					m_warning("cassette removed");
+					m_logging(m_logger, "CC: cassette removed", ERROR);
 					break;
 				case 3:
-					m_warning("cash box sensor error");
+					m_logging(m_logger, "CC: cash box sensor error", ERROR);
 					break;
 				case 4:
-					m_warning("sunlight on tube sensors");
+					m_logging(m_logger, "CC: sunlight on tube sensors", ERROR);
 					break;
 			}
 			break;
 		}
-#endif
 	}
 }

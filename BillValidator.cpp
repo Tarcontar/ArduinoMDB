@@ -1,15 +1,6 @@
 #include "BillValidator.hpp"
 #include <Arduino.h>
 
-#define BV_RESET_COMPLETED "BV: RESET COMPLETED"
-#define BV_RESET_FAILED "BV: RESET FAILED"
-#define BV_NOT_RESPONDING "BV: NOT RESPONDING"
-#define BV_SECURITY_FAILED "BV: SECURITY FAILED"
-#define BV_SETUP_ERROR "BV: SETUP ERROR"
-#define BV_TYPE_ERROR "BV: TYPE ERROR"
-#define BV_ESCROW_ERROR "BV: ESCROW ERROR"
-#define BV_STACKER_ERROR "BV: STACKER ERROR"
-
 
 BillValidator::BillValidator(MDBSerial &mdb) : MDBDevice(mdb)
 {
@@ -43,8 +34,7 @@ bool BillValidator::Update(unsigned long cc_change)
 		bitSet(b, 2); //enable 20€ bill
 	if (cc_change > 1500) //more than 15€
 		bitSet(b, 1); //enable 10€ bill
-	//if (cc_change > 500) //more than 5€
-	if (true)
+	if (cc_change > 500) //more than 5€
 		bitSet(b, 0); //enable 5€ bill
 	
 	int bills[] = { 0x00, b, 0x00, 0x00 };
@@ -68,16 +58,21 @@ bool BillValidator::Reset()
 			if (count > MAX_RESET_POLL) return false;
 			count++;
 		}
-		setup();
+		if (!setup())
+			return false;
 		security();
 		//Expansion(0x00); //ID
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
 		Print();
-		m_uart->println(BV_RESET_COMPLETED);
+#ifdef MDB_DEBUG
+		m_uart->println(F("BV: RESET COMPLETED"));
+#endif
 		return true;
 	}
-	//m_uart->println(BV_RESET_FAILED);
+#ifdef MDB_DEBUG
+	m_uart->println(F("BV: RESET FAILED"));
+#endif
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -86,10 +81,37 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-		//m_uart->println(BV_NOT_RESPONDING);
+#ifdef MDB_DEBUG
+		m_uart->println(F("BV: NOT RESPONDING"));
+#endif
 		return false;
 	}
 	return true;
+}
+
+void BillValidator::Print()
+{
+#ifdef MDB_DEBUG
+	m_uart->println(F("BILL VALIDATOR: "));
+	m_uart->print(F(" credit: "));
+	m_uart->print(m_credit);
+	m_uart->print(F("\n full: "));
+	m_uart->print((bool)m_full);
+	m_uart->print(F("\n bills in stacker: "));
+	m_uart->print(m_bills_in_stacker);
+	m_uart->print(F("\n feature level: "));
+	m_uart->print((int)m_feature_level);
+	m_uart->print(F("\n bill scaling factor: "));
+	m_uart->print((int)m_bill_scaling_factor);
+	m_uart->print(F("\n decimal places: "));
+	m_uart->print((int)m_decimal_places);
+	m_uart->print(F("\n capacity: "));
+	m_uart->print(m_stacker_capacity);
+	m_uart->print(F("\n security levels: "));
+	m_uart->print(m_security_levels);
+	
+	m_uart->println(F("\n###"));
+#endif
 }
 
 int BillValidator::poll()
@@ -99,8 +121,7 @@ int BillValidator::poll()
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
-	delay(45);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
 	if (answer == ACK)
 	{
 		return 1;
@@ -121,37 +142,39 @@ int BillValidator::poll()
 			}
 			else if (routing == 1)
 			{
-				//m_uart->println("escrow position");
+#ifdef MDB_DEBUG
+				m_uart->println(F("escrow position"));
+#endif
 				m_bill_in_escrow = true;
 			}
-			/*
+#ifdef MDB_DEBUG
 			else if (routing == 2)
 			{
-				m_uart->println("bill returned");
+				m_uart->println(F("bill returned"));
 			}
 			else if (routing == 3)
 			{
-				m_uart->println("bill to recycler");
+				m_uart->println(F("bill to recycler"));
 			}
 			else if (routing == 4)
 			{
-				m_uart->println("disabled bill rejected");
+				m_uart->println(F("disabled bill rejected"));
 			}
 			else if (routing == 5)
 			{
-				m_uart->println("bill to recycler - manual fill");
+				m_uart->println(F("bill to recycler - manual fill"));
 			}
 			else if (routing == 6)
 			{
-				m_uart->println("manual dispense");
+				m_uart->println(F("manual dispense"));
 			}
 			else if (routing == 7)
 			{
-				m_uart->println("transferred from recycler to cashbox");
+				m_uart->println(F("transferred from recycler to cashbox"));
 			}
-			*/
-			/*else
-				m_uart->println("routing error");*/
+			else
+				m_uart->println(F("routing error"));
+#endif
 		}
 		// number of input attempts while validator is disabled
 		else if (m_buffer[i] & 0b01000000)
@@ -214,19 +237,18 @@ int BillValidator::poll()
 			{
 			case 1:
 				//defective motor
-				//m_uart->println(F("defective motor"));
+				m_logging(m_logger, F("BV: defective motor"), WARNING);
 				break;
 			case 2:
 				//sensor problem
-				//m_uart->println(F"sensor problem"));
+				m_logging(m_logger, F("BV: sensor problem"), WARNING);
 				break;
 			case 3:
 				//validator busy
-				//m_uart->println(F("validator busy"));
 				break;
 			case 4:
 				//ROM Checksum Error
-				//m_uart->println("ROM Checksum error");
+				m_logging(m_logger, F("BV: ROM Checksum error"), WARNING);
 				break;
 			case 5:
 				//Validator jammed
@@ -243,7 +265,7 @@ int BillValidator::poll()
 				break;
 			case 8:
 				//cash box out of position
-				//m_uart->println("cash box out of position");
+				m_logging(m_logger, F("BV: cash box out of position"), WARNING);
 				break;
 			case 9:
 				//validator disabled
@@ -251,7 +273,7 @@ int BillValidator::poll()
 				break;
 			case 10:
 				//invalid escrow request
-				//m_uart->println("invalid escrow request");
+				m_logging(m_logger, F("BV: invalid escrow request"), WARNING);
 				break;
 			case 11:
 				//bill rejected
@@ -259,7 +281,7 @@ int BillValidator::poll()
 				break;
 			case 12:
 				//possible credited bill removal
-				//m_uart->println("possible credited bill removal");
+				m_logging(m_logger, F("BV: possible credited bill removal"), WARNING);
 				break;
 			/*default:
 				m_uart->println("default");*/
@@ -271,53 +293,16 @@ int BillValidator::poll()
 	return 1;
 }
 
-void BillValidator::security()
-{
-	int out[] = { 0xff, 0xff };
-	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
-	delay(10);
-	if (m_mdb->GetResponse() != ACK)
-	{
-		delay(50);
-		m_uart->println(BV_SECURITY_FAILED);
-		security();
-	}
-}
-
-void BillValidator::Print()
-{
-	/*
-	m_uart->println(F("BILL VALIDATOR: "));
-	m_uart->print(F(" credit: "));
-	m_uart->print(m_credit);
-	m_uart->print(F("\n full: "));
-	m_uart->print((bool)m_full);
-	m_uart->print(F("\n bills in stacker: "));
-	m_uart->print(m_bills_in_stacker);
-	m_uart->print(F("\n feature level: "));
-	m_uart->print((int)m_feature_level);
-	m_uart->print(F("\n bill scaling factor: "));
-	m_uart->print((int)m_bill_scaling_factor);
-	m_uart->print(F("\n decimal places: "));
-	m_uart->print((int)m_decimal_places);
-	m_uart->print(F("\n capacity: "));
-	m_uart->print(m_stacker_capacity);
-	m_uart->print(F("\n security levels: "));
-	m_uart->print(m_security_levels);
-	
-	m_uart->println(F("\n###"));
-	*/
-}
-
-void BillValidator::setup()
+bool BillValidator::setup(int it)
 {
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
-	delay(5);
 	m_mdb->Ack();
-	delay(60);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count);
+	delay(50);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 27);
+	m_uart->println(answer);
+	m_uart->println(m_count);
 	if (answer > 0 && m_count == 27)
 	{	
 		m_feature_level = m_buffer[0];
@@ -331,50 +316,51 @@ void BillValidator::setup()
 		{
 			m_bill_type_credit[i] = m_buffer[11 + i];
 		}
-		return;
+		return true;
 	}
-	
-	delay(50);
-	m_uart->println(BV_SETUP_ERROR);
-	setup();
+	if (it < 5)
+	{
+		delay(50);
+		return setup(++it);
+	}
+	m_logging(m_logger, F("BV: SETUP ERROR"), ERROR);
+	return false;
 }
 
-void BillValidator::type(int bills[])
+void BillValidator::security(int it)
+{
+	int out[] = { 0xff, 0xff };
+	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		if (it < 5)
+		{
+			delay(50);
+			return security(++it);
+		}
+		m_logging(m_logger, F("BV: SECURITY FAILED"), WARNING);
+	}
+}
+
+void BillValidator::type(int bills[], int it)
 {
 	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
-	delay(15);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		delay(50);
-		m_uart->println(BV_TYPE_ERROR);
-		type(bills);
+		if (it < 5)
+		{
+			delay(50);
+			return type(bills, ++it);
+		}
+		m_logging(m_logger, F("BV: TYPE ERROR"), WARNING);
 	}
 }
 
-void BillValidator::escrow(bool accept)
-{
-	int data[] = { 0x00 };
-	if (accept)
-		data[0] = 0x01;
-	m_mdb->SendCommand(ADDRESS, ESCROW, data, 1);
-	delay(10);
-	if (m_mdb->GetResponse() != ACK)
-	{
-		m_uart->println(BV_ESCROW_ERROR);
-		delay(50);
-		escrow(accept);
-	}
-	m_bill_in_escrow = false;
-}
-
-void BillValidator::stacker()
+void BillValidator::stacker(int it)
 {
 	m_mdb->SendCommand(ADDRESS, STACKER);
-	delay(5);
 	m_mdb->Ack();
-	//wait  3 ms for 2 bytes + 1ms (inter time) + 5ms (t response)
-	delay(15);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
 	if (answer > 0 && m_count == 2)
 	{
 		if (m_buffer[0] & 0b10000000)
@@ -384,15 +370,30 @@ void BillValidator::stacker()
 		else
 			m_full = false;
 		m_bills_in_stacker = m_buffer[0] & 0b01111111;
-		//m_uart->println(F("stacker ready"));
 		return;
 	}
-	m_uart->println(BV_STACKER_ERROR);
-	delay(50);
-	stacker();
+	if (it < 5)
+	{
+		delay(50);
+		return stacker(++it);
+	}
+	m_logging(m_logger, F("BV: STACKER ERROR"), ERROR);
 }
 
-void BillValidator::expansion()
+void BillValidator::escrow(bool accept, int it)
 {
-	
+	int data[] = { 0x00 };
+	if (accept)
+		data[0] = 0x01;
+	m_mdb->SendCommand(ADDRESS, ESCROW, data, 1);
+	if (m_mdb->GetResponse() == ACK)
+	{
+		m_bill_in_escrow = false;
+	}
+	if (it < 5)
+	{
+		delay(50);
+		return escrow(accept, ++it);
+	}
+	m_logging(m_logger, F("BV: ESCROW ERROR"), ERROR);
 }

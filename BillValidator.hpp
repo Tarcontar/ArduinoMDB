@@ -17,18 +17,18 @@ public:
 
 private:
 	int poll();
-	void setup();
-	void security();
-	void type(int bills[]);
-	void stacker();
-	void escrow(bool accept);
-	void expansion();
+	bool setup(int it = 0);
+	void security(int it = 0);
+	void type(int bills[], int it = 0);
+	void stacker(int it = 0);
+	void escrow(bool accept, int it = 0);
 
 	int ADDRESS;
 	int SECURITY;
 	int ESCROW;
 	int STACKER;
 
+	unsigned long m_change;
 	unsigned long m_credit;
 
 	bool m_full;
