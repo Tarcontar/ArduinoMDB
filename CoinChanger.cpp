@@ -58,9 +58,11 @@ bool CoinChanger::Update(unsigned long &change, int it)
 	}
 	else
 	{
-		m_logging(m_logger, "CC: DISPENSE FAILED", SEVERE);
-		//DisplayError();
-		delay(1000);
+		//to make sure we send the sms only once
+		if (it == 0)
+			m_logging(m_logger, "CC: DISPENSE FAILED", SEVERE);
+		else
+			m_logging(m_logger, "CC: DISPENSE FAILED", ERROR);
 		return false;
 	}
 	
