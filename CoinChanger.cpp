@@ -89,6 +89,7 @@ bool CoinChanger::Reset()
 			if (count > MAX_RESET_POLL) return false;
 			count++;
 		}
+		m_uart->println("setup");
 		if (!setup())
 			return false;
 		status();
@@ -240,6 +241,7 @@ int CoinChanger::poll()
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	m_uart->println(m_count);
 	if (answer == ACK)
 	{
 		return 1;

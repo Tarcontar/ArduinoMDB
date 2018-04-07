@@ -97,6 +97,7 @@ int MDBSerial::GetResponse(char data[], int *count, int num_bytes)
 	while (m_uart->available())
 	{
 		int resp = m_uart->read();
+		return resp;
 		char val = resp;
 		if (resp & 0x100)
 		{

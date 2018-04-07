@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "UART.hpp"
 
-//#define MDB_DEBUG //undefine to minimize code
+#define MDB_DEBUG //undefine to minimize code
 
 //MDB specific stuff
 #define DATA_MAX 36
