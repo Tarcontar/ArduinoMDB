@@ -17,7 +17,7 @@
 #define NO_RESPONSE 			2000
 
 #define MAX_RESET 				5
-#define MAX_RESET_POLL 			25
+#define MAX_RESET_POLL 			15
 
 #define SETUP_TIME 				200
 #define RESPONSE_TIME 			5
