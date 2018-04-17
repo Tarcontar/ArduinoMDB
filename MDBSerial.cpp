@@ -1,5 +1,6 @@
 #include "MDBSerial.hpp"
 
+
 MDBSerial::MDBSerial(uint8_t uart) 
 {
 	m_uart = new UART(uart);

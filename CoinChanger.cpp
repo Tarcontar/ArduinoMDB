@@ -1,6 +1,7 @@
 #include "CoinChanger.hpp"
 #include <Arduino.h>
 
+
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 {
 	ADDRESS = 0x08;
