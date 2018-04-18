@@ -44,11 +44,15 @@ bool CoinChanger::Update(unsigned long &change, int it)
 	poll();
 	status();
 	
-	if (m_feature_level >= 3 && (m_update_count % 50) == 0)
+	if ((m_update_count % 50) == 0)
 	{
-		expansion_send_diagnostic_status();
+		if (m_feature_level >= 3)
+		{
+			expansion_send_diagnostic_status();
+		}
+		m_update_count = 0;
 	}
-	
+
 	if(m_feature_level >= 3)
 		expansion_payout_status();
 	
@@ -441,7 +445,11 @@ void CoinChanger::status(int it)
 
 void CoinChanger::type(int it)
 {
-	int out[] = { m_acceptedCoins >> 8, m_acceptedCoins & 0b11111111, m_dispenseableCoins >> 8, m_dispenseableCoins & 0b11111111 };
+	int out[] = { uint8_t((m_acceptedCoins & 0xff00) >> 8), 
+					uint8_t(m_acceptedCoins & 0xff), 
+					uint8_t((m_dispenseableCoins & 0xff00) >> 8), 
+					uint8_t(m_dispenseableCoins & 0xff) };
+					
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	if (m_mdb->GetResponse() != ACK)
 	{

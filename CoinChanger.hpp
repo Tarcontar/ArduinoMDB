@@ -41,8 +41,8 @@ private:
 	int STATUS;
 	int DISPENSE;
 	
-	int m_acceptedCoins;
-	int m_dispenseableCoins;
+	unsigned int m_acceptedCoins;
+	unsigned int m_dispenseableCoins;
 
 	unsigned long m_credit;
 	
