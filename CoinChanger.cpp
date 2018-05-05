@@ -26,7 +26,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_tube_full_status = 0;
 	
 	m_software_version = 0;
-	m_optional_features = 0;
+	m_optional_features = 3;
 	
 	m_alternative_payout_supported = false;
 	m_extended_diagnostic_supported = false;
@@ -50,11 +50,13 @@ bool CoinChanger::Update(unsigned long &change, int it)
 		{
 			expansion_send_diagnostic_status();
 		}
+		//Dispense(15, 1);
 		m_update_count = 0;
 	}
 
 	if(m_feature_level >= 3)
 		expansion_payout_status();
+	
 	
 	if (m_dispensed_value >= m_value_to_dispense)
 	{
@@ -65,9 +67,9 @@ bool CoinChanger::Update(unsigned long &change, int it)
 	{
 		//to make sure we send the sms only once
 		if (it == 0)
-			m_logging(m_logger, "CC: DISPENSE FAILED", SEVERE);
+			m_logging(m_logger, F("CC: DISPENSE FAILED"), SEVERE);
 		else
-			m_logging(m_logger, "CC: DISPENSE FAILED", ERROR);
+			m_logging(m_logger, F("CC: DISPENSE FAILED"), ERROR);
 		return false;
 	}
 	
@@ -85,6 +87,8 @@ bool CoinChanger::Update(unsigned long &change, int it)
 
 bool CoinChanger::Reset()
 {
+	expansion_send_diagnostic_status(); //waits for dispenser to start
+	
 	m_mdb->SendCommand(ADDRESS, RESET);
 	if ((m_mdb->GetResponse() == ACK))
 	{
@@ -115,7 +119,7 @@ bool CoinChanger::Reset()
 	{
 		m_resetCount = 0;
 #ifdef MDB_DEBUG
-		m_logging(m_logger, "CC: NOT RESPONDING", ERROR);
+		m_logging(m_logger, F("CC: NOT RESPONDING"), ERROR);
 #endif
 		return false;
 	}
@@ -134,7 +138,7 @@ bool CoinChanger::Dispense(unsigned long value)
 	}
 	else
 	{
-		m_logging(m_logger, "CC: OLD DISPENSE USED", WARNING);
+		m_logging(m_logger, F("CC: OLD DISPENSE USED"), WARNING);
 		for (int i = 15; i >= 0; i--)
 		{
 			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
@@ -145,6 +149,8 @@ bool CoinChanger::Dispense(unsigned long value)
 				m_value_to_dispense += val;
 				value -= val;
 			}
+			if (value <= 0)
+				break;
 		}
 		
 		if (value == 0)
@@ -166,7 +172,7 @@ bool CoinChanger::Dispense(int coin, int count)
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		m_logging(m_logger, "CC: DISPENSE FAILED", WARNING);
+		m_logging(m_logger, F("CC: DISPENSE FAILED"), WARNING);
 		return false;
 	}
 	return true;
@@ -279,7 +285,7 @@ int CoinChanger::poll()
 			//else coin rejected
 			else
 			{
-				m_uart->println("coin rejected");
+				m_uart->println(F("CC: coin rejected"));
 			}
 #endif
 			i++; //cause we used 2 bytes
@@ -289,7 +295,7 @@ int CoinChanger::poll()
 		else if (m_buffer[i] & 0b00100000)
 		{
 			int slug_count = m_buffer[i] & 0b00011111;
-			m_uart->println("slug");
+			m_uart->println(F("CC: slug"));
 		}
 #endif
 		//status
@@ -300,52 +306,52 @@ int CoinChanger::poll()
 #ifdef MDB_DEBUG
 			case 1:
 				//escrow request
-				m_uart->println("escrow request");
+				m_uart->println(F("CC: escrow request"));
 				//TODO: handle dispense here?
 				break;
 #endif				
 			case 2:
 				//changer payout busy
-				m_uart->println("changer payout busy");
+				m_uart->println(F("CC: changer payout busy"));
 				payout_busy = true;
 				break;
 #ifdef MDB_DEBUG
 			case 3:
 				//no credit
-				m_uart->println("no credit");
+				m_uart->println(F("CC: no credit"));
 				break;
 #endif
 			case 4:
 				//defective tube sensor
-				m_logging(m_logger, "CC: defective tube sensor", WARNING);
+				m_logging(m_logger, F("CC: defective tube sensor"), WARNING);
 				//m_warning("defective tube sensor");
 				break;
 #ifdef MDB_DEBUG
 			case 5:
 				//double arrival
-				m_uart->println("double arrival");
+				m_uart->println(F("CC: double arrival"));
 				break;
 			case 6:
 				//acceptor unplugged
-				m_uart->println("acceptor unplugged");
+				m_uart->println(F("CC: acceptor unplugged"));
 				break;
 			case 7:
 				//tube jam
-				m_uart->println("tube jam");
+				m_uart->println(F("CC: tube jam"));
 				break;
 #endif
 			case 8:
 				//ROM checksum error
-				m_logging(m_logger, "CC: ROM checksum error", WARNING);
+				m_logging(m_logger, F("CC: ROM checksum error"), WARNING);
 				break;
 #ifdef MDB_DEBUG
 			case 9:
 				//coin routing error
-				m_uart->println("coin routing error");
+				m_uart->println(F("CC: coin routing error"));
 				break;
 			case 10:
 				//changer busy
-				m_uart->println("changer busy");
+				m_uart->println(F("CC: changer busy"));
 				break;
 #endif
 			case 11:
@@ -353,17 +359,17 @@ int CoinChanger::poll()
 				//m_uart->println("JUST RESET");
 				reset = true;
 				break;
-#ifdef MDB_DEBUG
 			case 12:
 				//coin jam
-				m_uart->println("coin jam");
+				m_logging(m_logger, F("CC: coin jam"), WARNING);
 				break;
+#ifdef MDB_DEBUG
 			case 13:
 				//possible credited coin removal
-				m_uart->println("credited coin removal");
+				m_uart->println(F("CC: credited coin removal"));
 				break;
 			default:
-				m_uart->println("default");
+				m_uart->println(F("CC: default"));
 				for ( ; i < m_count; i++)
 					m_uart->println(m_buffer[i]);
 #endif
@@ -383,10 +389,10 @@ int CoinChanger::poll()
 bool CoinChanger::setup(int it)
 {
 	m_mdb->SendCommand(ADDRESS, SETUP);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 23);
 	if (answer >= 0 && m_count == 23)
 	{
+		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
 		m_coin_scaling_factor = m_buffer[3];
@@ -412,17 +418,17 @@ bool CoinChanger::setup(int it)
 		delay(50);
 		return setup(++it);
 	}
-	m_logging(m_logger, "CC: SETUP ERROR", ERROR);
+	m_logging(m_logger, F("CC: SETUP ERROR"), ERROR);
 	return false;
 }
 
 void CoinChanger::status(int it)
 {
 	m_mdb->SendCommand(ADDRESS, STATUS);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 18);
 	if (answer != -1 && m_count == 18)
 	{
+		m_mdb->Ack();
 		//if bit is set, the tube is full
 		m_tube_full_status = m_buffer[0] << 8 | m_buffer[1];
 		for (int i = 0; i < 16; i++)
@@ -440,7 +446,7 @@ void CoinChanger::status(int it)
 		delay(50);
 		return status(++it);
 	}
-	m_logging(m_logger, "CC: STATUS ERROR", WARNING);
+	m_logging(m_logger, F("CC: STATUS ERROR"), WARNING);
 }
 
 void CoinChanger::type(int it)
@@ -458,17 +464,17 @@ void CoinChanger::type(int it)
 			delay(50);
 			return type(++it);
 		}
-		m_logging(m_logger, "CC: TYPE ERROR", ERROR);
+		m_logging(m_logger, F("CC: TYPE ERROR"), ERROR);
 	}
 }
 
 void CoinChanger::expansion_identification(int it)
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION, IDENTIFICATION);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 33);
 	if (answer > 0 && m_count == 33)
 	{
+		m_mdb->Ack();
 		// * 1L to overcome 16bit integer error
 		m_manufacturer_code = (m_buffer[0] * 1L) << 16 | m_buffer[1] << 8 | m_buffer[2];
 		for (int i = 0; i < 12; i++)
@@ -503,18 +509,21 @@ void CoinChanger::expansion_identification(int it)
 		delay(50);
 		expansion_identification(++it);
 	}
-	m_logging(m_logger, "CC: EXP ID ERROR", ERROR);
+	m_logging(m_logger, F("CC: EXP ID ERROR"), ERROR);
 }
 
 void CoinChanger::expansion_feature_enable(int features)
 {
-	int out[] = { 0x00, 0x00, 0x00, features };
+	int out[] = { 0xff, 0xff, 0xff, 0xff };
 	m_mdb->SendCommand(ADDRESS, EXPANSION, FEATURE_ENABLE, out, 4);
 }
 
 void CoinChanger::expansion_payout(int value)
 {
-	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &value, 1);
+	//expansion_feature_enable(1);
+	int val = 1;
+	//m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &val, 1);
+	Dispense(15, 1);
 }
 
 //number of each coin dispensed since last alternative payout (expansion_payout)
@@ -524,14 +533,15 @@ void CoinChanger::expansion_payout_status(int it)
 {
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_STATUS);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
-	m_mdb->Ack();
 	if (answer == ACK) //payout busy
 	{
-		if (it < 5)
-		{	
-			delay(500);
-			expansion_payout_status(it++);
-		}
+		m_mdb->Ack();
+		//if (it < 5)
+		//{	
+			m_uart->println("busy");
+			delay(500);		
+			expansion_payout_status(++it);
+		//}
 		return;
 	}
 	else if (answer > 0 && m_count == 16)
@@ -562,155 +572,170 @@ long CoinChanger::expansion_payout_value_poll()
 //should be send by the vmc every 1-10 seconds
 void CoinChanger::expansion_send_diagnostic_status()
 {
+	bool powering_up = false;
+	
 	m_mdb->SendCommand(ADDRESS, EXPANSION, SEND_DIAGNOSTIC_STATUS);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
-	if (answer > 0 && m_count == 2)
+	
+	if (answer > 0 && m_count >= 2)
 	{		
-		switch (m_buffer[0])
+		m_mdb->Ack();
+		
+		for (int i = 0; i < m_count / 2; i++)
 		{
-		case 1:
-			//("CC: powering up");
-			break;
-		case 2:
-			//("CC: powering down");
-			break;
-		case 3:
-			//("CC: OK");
-			break;
-		case 4:
-			//("CC: Keypad shifted");
-			break;
-			
-		case 5:
-			switch (m_buffer[1])
+			switch (m_buffer[0])
 			{
-			case 10:
-				//("CC: manual fill / payout active");
-				break;
-			case 20:
-				//("CC: new inventory information available");
-				break;
-			}
-			break;
-			
-		case 6:
-			//("CC: inhibited by VMC");
-			break;
-			
-		case 10:
-			switch(m_buffer[1])
-			{
-			case 0:
-				m_logging(m_logger, "CC: non specific error", ERROR);
-				break;
 			case 1:
-				m_logging(m_logger, "CC: check sum error #1", ERROR);
+				m_logging(m_logger, F("CC: powering up"), 0);
+				powering_up = true;
 				break;
 			case 2:
-				m_logging(m_logger, "CC: check sum error #2", ERROR);
+				//("CC: powering down");
 				break;
 			case 3:
-				m_logging(m_logger, "CC: low line voltage detected", ERROR);
+				m_uart->println(F("CC: OK"));
+				//m_logging(m_logger, F("CC: OK"), 0);
 				break;
-			}
-			break;
-			
-		case 11:
-			switch(m_buffer[1])
-			{
-				case 0:
-					m_logging(m_logger, "CC: non specific discriminator error", ERROR);
-					break;
+			case 4:
+				//("CC: Keypad shifted");
+				break;
+				
+			case 5:
+				switch (m_buffer[1])
+				{
 				case 10:
-					m_logging(m_logger, "CC: flight deck open", ERROR);
+					//("CC: manual fill / payout active");
 					break;
-				case 11:
-					m_logging(m_logger, "CC: escrow return stuck open", ERROR);
+				case 20:
+					//("CC: new inventory information available");
 					break;
-				case 30:
-					m_logging(m_logger, "CC: coin jam in sensor", ERROR);
-					break;
-				case 41:
-					m_logging(m_logger, "CC: discrimination below specified standard", ERROR);
-					break;
-				case 50:
-					m_logging(m_logger, "CC: validation sensor A out of range", ERROR);
-					break;
-				case 51:
-					m_logging(m_logger, "CC: validation sensor B out of range", ERROR);
-					break;
-				case 52:
-					m_logging(m_logger, "CC: validation sensor C out of range", ERROR);
-					break;
-				case 53:
-					m_logging(m_logger, "CC: operation temperature exceeded", ERROR);
-					break;
-				case 54:
-					m_logging(m_logger, "CC: sizing optics failure", ERROR);
-					break;
-			}
-			break;
-		
-		case 12:
-			switch(m_buffer[1])
-			{
+				}
+				break;
+				
+			case 6:
+				m_logging(m_logger, F("CC: inhibited by VMC"), WARNING);
+				break;
+				
+			case 10:
+				switch(m_buffer[1])
+				{
 				case 0:
-					m_logging(m_logger, "CC: non specific accept gate error", ERROR);
+					m_logging(m_logger, F("CC: non specific error"), ERROR);
 					break;
-				case 30:
-					m_logging(m_logger, "CC: coins entered gate, but did not exit", ERROR);
-					break;
-				case 31:
-					m_logging(m_logger, "CC: accept gate alarm active", ERROR);
-					break;
-				case 40:
-					m_logging(m_logger, "CC: accept gate open, but no coin detected", ERROR);
-					break;
-				case 50:
-					m_logging(m_logger, "CC: post gate sensor covered before gate openend", ERROR);
-					break;
-			}
-			break;
-		
-		case 13:
-			switch(m_buffer[1])
-			{
-				case 0:
-					m_logging(m_logger, "CC: non specific separator error", ERROR);
-					break;
-				case 10:
-					m_logging(m_logger, "CC: sort sensor error", ERROR);
-					break;
-			}
-			break;
-
-		case 14:
-			switch(m_buffer[1])
-			{
-				case 0:
-					m_logging(m_logger, "CC: non specific dispenser error", ERROR);
-					break;
-			}
-			break;
-			
-		case 15:
-			switch(m_buffer[1])
-			{
-				case 0:
-					m_logging(m_logger, "CC: non specific cassette error", ERROR);
+				case 1:
+					m_logging(m_logger, F("CC: check sum error #1"), ERROR);
 					break;
 				case 2:
-					m_logging(m_logger, "CC: cassette removed", ERROR);
+					m_logging(m_logger, F("CC: check sum error #2"), ERROR);
 					break;
 				case 3:
-					m_logging(m_logger, "CC: cash box sensor error", ERROR);
+					m_logging(m_logger, F("CC: low line voltage detected"), ERROR);
 					break;
-				case 4:
-					m_logging(m_logger, "CC: sunlight on tube sensors", ERROR);
-					break;
+				}
+				break;
+				
+			case 11:
+				switch(m_buffer[1])
+				{
+					case 0:
+						m_logging(m_logger, F("CC: non specific discriminator error"), ERROR);
+						break;
+					case 10:
+						m_logging(m_logger, F("CC: flight deck open"), ERROR);
+						break;
+					case 11:
+						m_logging(m_logger, F("CC: escrow return stuck open"), ERROR);
+						break;
+					case 30:
+						m_logging(m_logger, F("CC: coin jam in sensor"), ERROR);
+						break;
+					case 41:
+						m_logging(m_logger, F("CC: discrimination below specified standard"), ERROR);
+						break;
+					case 50:
+						m_logging(m_logger, F("CC: validation sensor A out of range"), ERROR);
+						break;
+					case 51:
+						m_logging(m_logger, F("CC: validation sensor B out of range"), ERROR);
+						break;
+					case 52:
+						m_logging(m_logger, F("CC: validation sensor C out of range"), ERROR);
+						break;
+					case 53:
+						m_logging(m_logger, F("CC: operation temperature exceeded"), ERROR);
+						break;
+					case 54:
+						m_logging(m_logger, F("CC: sizing optics failure"), ERROR);
+						break;
+				}
+				break;
+			
+			case 12:
+				switch(m_buffer[1])
+				{
+					case 0:
+						m_logging(m_logger, F("CC: non specific accept gate error"), ERROR);
+						break;
+					case 30:
+						m_logging(m_logger, F("CC: coins entered gate, but did not exit"), ERROR);
+						break;
+					case 31:
+						m_logging(m_logger, F("CC: accept gate alarm active"), ERROR);
+						break;
+					case 40:
+						m_logging(m_logger, F("CC: accept gate open, but no coin detected"), ERROR);
+						break;
+					case 50:
+						m_logging(m_logger, F("CC: post gate sensor covered before gate openend"), ERROR);
+						break;
+				}
+				break;
+			
+			case 13:
+				switch(m_buffer[1])
+				{
+					case 0:
+						m_logging(m_logger, F("CC: non specific separator error"), ERROR);
+						break;
+					case 10:
+						m_logging(m_logger, F("CC: sort sensor error"), ERROR);
+						break;
+				}
+				break;
+
+			case 14:
+				switch(m_buffer[1])
+				{
+					case 0:
+						m_logging(m_logger, F("CC: non specific dispenser error"), ERROR);
+						break;
+				}
+				break;
+				
+			case 15:
+				switch(m_buffer[1])
+				{
+					case 0:
+						m_logging(m_logger, F("CC: non specific cassette error"), ERROR);
+						break;
+					case 2:
+						m_logging(m_logger, F("CC: cassette removed"), ERROR);
+						break;
+					case 3:
+						m_logging(m_logger, F("CC: cash box sensor error"), ERROR);
+						break;
+					case 4:
+						m_logging(m_logger, F("CC: sunlight on tube sensors"), ERROR);
+						break;
+				}
+				break;
 			}
-			break;
+		}
+		
+		if (powering_up)
+		{
+			delay(1000);
+			expansion_send_diagnostic_status();
 		}
 	}
 }
