@@ -30,20 +30,20 @@ class MDBDevice
 {
 public:
 	explicit
-	MDBDevice(MDBSerial &mdb ) : m_mdb(&mdb) {}
+	MDBDevice(MDBSerial &mdb) : m_mdb(&mdb) {}
 
 	virtual bool Reset() = 0;
 
 	virtual void Print() = 0;
 	
-	inline void SetUART(UART &uart) { m_uart = &uart; }
+	inline void SetUART(UART &uart) { m_uart = uart; }
 	inline void SetLoggingFunction(void* obj, void (*logging)(void*, String, int)) { m_logger = obj; m_logging =  logging; }
 	
 protected:
 	virtual int poll() = 0;
 	
 	MDBSerial *m_mdb;
-	UART *m_uart;
+	UART m_uart;
 	
 	void *m_logger;
 	void (*m_logging)(void*, String, int val);
