@@ -2,8 +2,6 @@
 #include <Arduino.h>
 #include "UART.hpp"
 
-//#define MDB_DEBUG FALSE//undefine to minimize code
-
 //MDB specific stuff
 #define DATA_MAX 36
 

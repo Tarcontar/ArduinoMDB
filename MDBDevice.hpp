@@ -1,7 +1,7 @@
 #pragma once
 
 #include "MDBSerial.hpp"
-#include "UART.hpp"
+#include "Logger.hpp"
 #include <Arduino.h>
 
 #define RESET 					0x00
@@ -36,17 +36,10 @@ public:
 
 	virtual void Print() = 0;
 	
-	inline void SetUART(UART &uart) { m_uart = uart; }
-	inline void SetLoggingFunction(void* obj, void (*logging)(void*, String, int)) { m_logger = obj; m_logging =  logging; }
-	
 protected:
 	virtual int poll() = 0;
 	
 	MDBSerial *m_mdb;
-	UART m_uart;
-	
-	void *m_logger;
-	void (*m_logging)(void*, String, int val);
 
 	int m_resetCount;
 	

@@ -65,14 +65,11 @@ bool BillValidator::Reset()
 		//Expansion(0x01); //Feature
 		//Expansion(0x05); //Status
 		Print();
-#ifdef MDB_DEBUG
-		m_uart->println(F("BV: RESET COMPLETED"));
-#endif
+		debug << F("BV: RESET COMPLETED") << endl;
 		return true;
 	}
-#ifdef MDB_DEBUG
-	m_uart->println(F("BV: RESET FAILED"));
-#endif
+	debug << F("BV: RESET FAILED") << endl;
+	
 	if (m_resetCount < MAX_RESET)
 	{
 		m_resetCount++;
@@ -81,9 +78,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-#ifdef MDB_DEBUG
-		m_uart->println(F("BV: NOT RESPONDING"));
-#endif
+		status << F("BV: NOT RESPONDING") << endl;
 		return false;
 	}
 	return true;
@@ -91,27 +86,16 @@ bool BillValidator::Reset()
 
 void BillValidator::Print()
 {
-#ifdef MDB_DEBUG
-	m_uart->println(F("BILL VALIDATOR: "));
-	m_uart->print(F(" credit: "));
-	m_uart->print(m_credit);
-	m_uart->print(F("\n full: "));
-	m_uart->print((bool)m_full);
-	m_uart->print(F("\n bills in stacker: "));
-	m_uart->print(m_bills_in_stacker);
-	m_uart->print(F("\n feature level: "));
-	m_uart->print((int)m_feature_level);
-	m_uart->print(F("\n bill scaling factor: "));
-	m_uart->print((int)m_bill_scaling_factor);
-	m_uart->print(F("\n decimal places: "));
-	m_uart->print((int)m_decimal_places);
-	m_uart->print(F("\n capacity: "));
-	m_uart->print(m_stacker_capacity);
-	m_uart->print(F("\n security levels: "));
-	m_uart->print(m_security_levels);
-	
-	m_uart->println(F("\n###"));
-#endif
+	debug << F("## BILL VALIDATOR ##") << endl;
+	debug << F("credit: ") << m_credit << endl;
+	debug << F("full: ") << (bool)m_full << endl;
+	debug << F("bills in stacker: ") << m_bills_in_stacker << endl;
+	debug << F("feature level: ") << (int)m_feature_level << endl;
+	debug << F("bill scaling factor: ") << (int)m_bill_scaling_factor << endl;
+	debug << F("decimal places: ") << (int)m_decimal_places << endl;
+	debug << F("capacity: ") << m_stacker_capacity << endl;
+	debug << F("security levels: ") << m_security_levels << endl;
+	debug << F("###") << endl;;
 }
 
 int BillValidator::poll()
@@ -142,39 +126,35 @@ int BillValidator::poll()
 			}
 			else if (routing == 1)
 			{
-#ifdef MDB_DEBUG
-				m_uart->println(F("escrow position"));
-#endif
+				debug << F("escrow position") << endl;
 				m_bill_in_escrow = true;
 			}
-#ifdef MDB_DEBUG
 			else if (routing == 2)
 			{
-				m_uart->println(F("bill returned"));
+				debug << F("bill returned") << endl;
 			}
 			else if (routing == 3)
 			{
-				m_uart->println(F("bill to recycler"));
+				debug << F("bill to recycler") << endl;
 			}
 			else if (routing == 4)
 			{
-				m_uart->println(F("disabled bill rejected"));
+				debug << F("disabled bill rejected") << endl;
 			}
 			else if (routing == 5)
 			{
-				m_uart->println(F("bill to recycler - manual fill"));
+				debug << F("bill to recycler - manual fill") << endl;
 			}
 			else if (routing == 6)
 			{
-				m_uart->println(F("manual dispense"));
+				debug << F("manual dispense") << endl;
 			}
 			else if (routing == 7)
 			{
-				m_uart->println(F("transferred from recycler to cashbox"));
+				debug << F("transferred from recycler to cashbox") << endl;
 			}
 			else
-				m_uart->println(F("routing error"));
-#endif
+				debug << F("routing error") << endl;
 		}
 		// number of input attempts while validator is disabled
 		else if (m_buffer[i] & 0b01000000)
@@ -237,18 +217,18 @@ int BillValidator::poll()
 			{
 			case 1:
 				//defective motor
-				m_logging(m_logger, F("BV: defective motor"), WARNING);
+				warning << F("BV: defective motor") << endl;
 				break;
 			case 2:
 				//sensor problem
-				m_logging(m_logger, F("BV: sensor problem"), WARNING);
+				warning << F("BV: sensor problem") << endl;
 				break;
 			case 3:
 				//validator busy
 				break;
 			case 4:
 				//ROM Checksum Error
-				m_logging(m_logger, F("BV: ROM Checksum error"), WARNING);
+				warning << F("BV: ROM Checksum error") << endl;
 				break;
 			case 5:
 				//Validator jammed
@@ -265,7 +245,7 @@ int BillValidator::poll()
 				break;
 			case 8:
 				//cash box out of position
-				m_logging(m_logger, F("BV: cash box out of position"), WARNING);
+				warning << F("BV: cash box out of position") << endl;
 				break;
 			case 9:
 				//validator disabled
@@ -273,7 +253,7 @@ int BillValidator::poll()
 				break;
 			case 10:
 				//invalid escrow request
-				m_logging(m_logger, F("BV: invalid escrow request"), WARNING);
+				warning << F("BV: invalid escrow request") << endl;
 				break;
 			case 11:
 				//bill rejected
@@ -281,10 +261,8 @@ int BillValidator::poll()
 				break;
 			case 12:
 				//possible credited bill removal
-				m_logging(m_logger, F("BV: possible credited bill removal"), WARNING);
+				warning << F("BV: possible credited bill removal") << endl;
 				break;
-			/*default:
-				m_uart->println("default");*/
 			}
 		}
 	}
@@ -301,8 +279,6 @@ bool BillValidator::setup(int it)
 	m_mdb->Ack();
 	delay(50);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, 27);
-	m_uart->println(answer);
-	m_uart->println(m_count);
 	if (answer > 0 && m_count == 27)
 	{	
 		m_feature_level = m_buffer[0];
@@ -323,7 +299,7 @@ bool BillValidator::setup(int it)
 		delay(50);
 		return setup(++it);
 	}
-	m_logging(m_logger, F("BV: SETUP ERROR"), ERROR);
+	error << F("BV: SETUP ERROR") << endl;
 	return false;
 }
 
@@ -338,7 +314,7 @@ void BillValidator::security(int it)
 			delay(50);
 			return security(++it);
 		}
-		m_logging(m_logger, F("BV: SECURITY FAILED"), WARNING);
+		warning << F("BV: SECURITY FAILED") << endl;
 	}
 }
 
@@ -352,7 +328,7 @@ void BillValidator::type(int bills[], int it)
 			delay(50);
 			return type(bills, ++it);
 		}
-		m_logging(m_logger, F("BV: TYPE ERROR"), WARNING);
+		warning << F("BV: TYPE ERROR") << endl;
 	}
 }
 
@@ -377,7 +353,7 @@ void BillValidator::stacker(int it)
 		delay(50);
 		return stacker(++it);
 	}
-	m_logging(m_logger, F("BV: STACKER ERROR"), ERROR);
+	warning << F("BV: STACKER ERROR") << endl;
 }
 
 void BillValidator::escrow(bool accept, int it)
@@ -395,5 +371,5 @@ void BillValidator::escrow(bool accept, int it)
 		delay(50);
 		return escrow(accept, ++it);
 	}
-	m_logging(m_logger, F("BV: ESCROW ERROR"), ERROR);
+	error << F("BV: ESCROW ERROR") << endl;
 }
