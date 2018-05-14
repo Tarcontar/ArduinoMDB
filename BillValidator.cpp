@@ -100,19 +100,20 @@ void BillValidator::Print()
 
 int BillValidator::poll()
 {
+	int response_size = 16;
 	bool reset = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK)
 	{
 		return 1;
 	}
 	
 	//max of 16 bytes as response
-	for (int i = 0; i < m_count && i < 16; i++)
+	for (int i = 0; i < m_count && i < response_size; i++)
 	{
 		//bill status
 		if (m_buffer[i] & 0b10000000)
@@ -122,39 +123,40 @@ int BillValidator::poll()
 
 			if (routing == 0)
 			{
+				debug << F("BV: bill credited") << endl;
 				m_credit += (m_bill_type_credit[type] * m_bill_scaling_factor);
 			}
 			else if (routing == 1)
 			{
-				debug << F("escrow position") << endl;
+				debug << F("BV: escrow position") << endl;
 				m_bill_in_escrow = true;
 			}
 			else if (routing == 2)
 			{
-				debug << F("bill returned") << endl;
+				debug << F("BV: bill returned") << endl;
 			}
 			else if (routing == 3)
 			{
-				debug << F("bill to recycler") << endl;
+				debug << F("BV: bill to recycler") << endl;
 			}
 			else if (routing == 4)
 			{
-				debug << F("disabled bill rejected") << endl;
+				debug << F("BV: disabled bill rejected") << endl;
 			}
 			else if (routing == 5)
 			{
-				debug << F("bill to recycler - manual fill") << endl;
+				debug << F("BV: bill to recycler - manual fill") << endl;
 			}
 			else if (routing == 6)
 			{
-				debug << F("manual dispense") << endl;
+				debug << F("BV: manual dispense") << endl;
 			}
 			else if (routing == 7)
 			{
-				debug << F("transferred from recycler to cashbox") << endl;
+				debug << F("BV: transferred from recycler to cashbox") << endl;
 			}
 			else
-				debug << F("routing error") << endl;
+				debug << F("BV: routing error") << endl;
 		}
 		// number of input attempts while validator is disabled
 		else if (m_buffer[i] & 0b01000000)
@@ -168,46 +170,44 @@ int BillValidator::poll()
 			switch (val)
 			{
 			case 1:
-				//m_uart->println("escrow request");
+				debug << F("BV: escrow request") << endl;
 				break;
 			case 2:
-				//m_uart->println("payout busy");
+				debug << F("BV: payout busy") << endl;
 				break;
 			case 3:
-				//m_uart->println("dispenser busy");
+				debug << F("BV: dispenser busy") << endl;
 				break;
 			case 4:
-				//m_uart->println("defective dispenser sensor");
+				debug << F("BV: defective dispenser sensor") << endl;
 				break;
 			case 5:
-				//m_uart->println("not used");
+				//not used
 				break;
 			case 6:
-				//m_uart->println("dispenser did not start / motor problem");
+				debug << F("BV: dispenser did not start / motor problem") << endl;
 				break;
 			case 7:
-				//m_uart->println("dispenser jam");
+				debug << F("BV: dispenser jam") << endl;
 				break;
 			case 8:
-				//m_uart->println("ROM checksum error");
+				debug << F("BV: ROM checksum error") << endl;
 				break;
 			case 9:
-				//m_uart->println("dispenser disabled");
+				debug << F("BV: dispenser disabled") << endl;
 				break;
 			case 10:
-				//m_uart->println("bill waiting");
+				debug << F("BV: bill waiting") << endl;
 				break;
 			case 11: //unused
 			case 12: //unused
 			case 13: //unused
 			case 14: //unused
 			case 15:
-				//m_uart->println("filled key pressed");
+				debug << F("BV: filled key pressed") << endl;
 				break;
-			/*
 			default:
-				m_uart->println("default bill rec");
-			*/
+				debug << F("BV: default status") << endl;
 			}
 		}
 		//status
@@ -216,51 +216,40 @@ int BillValidator::poll()
 			switch (m_buffer[i])
 			{
 			case 1:
-				//defective motor
 				warning << F("BV: defective motor") << endl;
 				break;
 			case 2:
-				//sensor problem
 				warning << F("BV: sensor problem") << endl;
 				break;
 			case 3:
-				//validator busy
+				debug << F("BV: validator busy") << endl;
 				break;
 			case 4:
-				//ROM Checksum Error
 				warning << F("BV: ROM Checksum error") << endl;
 				break;
 			case 5:
-				//Validator jammed
-				//m_uart->println("validator jammed");
+				warning << F("BV: validator jammed") << endl;
 				break;
 			case 6:
-				//validator was reset
-				//m_uart->println("just reset");
+				debug << F("BV: just reset") << endl;
 				reset = true;
 				break;
 			case 7:
-				//bill removed
-				//m_uart->println("bill removed");
+				debug << F("BV: bill removed") << endl;
 				break;
 			case 8:
-				//cash box out of position
 				warning << F("BV: cash box out of position") << endl;
 				break;
 			case 9:
-				//validator disabled
-				//m_uart->println(F("validator disabled"));
+				debug << F("BV: validator disabled") << endl;
 				break;
 			case 10:
-				//invalid escrow request
 				warning << F("BV: invalid escrow request") << endl;
 				break;
 			case 11:
-				//bill rejected
-				//m_uart->println("bill rejected");
+				debug << F("BV: bill rejected") << endl;
 				break;
 			case 12:
-				//possible credited bill removal
 				warning << F("BV: possible credited bill removal") << endl;
 				break;
 			}
@@ -273,13 +262,14 @@ int BillValidator::poll()
 
 bool BillValidator::setup(int it)
 {
+	int response_size = 27;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
 	m_mdb->Ack();
 	delay(50);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 27);
-	if (answer > 0 && m_count == 27)
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
+	if (answer > 0 && m_count == response_size)
 	{	
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
@@ -294,7 +284,7 @@ bool BillValidator::setup(int it)
 		}
 		return true;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
 		return setup(++it);
@@ -309,7 +299,7 @@ void BillValidator::security(int it)
 	m_mdb->SendCommand(ADDRESS, SECURITY, out, 2);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		if (it < 5)
+		if (it < MAX_RESET)
 		{
 			delay(50);
 			return security(++it);
@@ -323,7 +313,7 @@ void BillValidator::type(int bills[], int it)
 	m_mdb->SendCommand(ADDRESS, TYPE, bills, 4);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		if (it < 5)
+		if (it < MAX_RESET)
 		{
 			delay(50);
 			return type(bills, ++it);
@@ -334,10 +324,11 @@ void BillValidator::type(int bills[], int it)
 
 void BillValidator::stacker(int it)
 {
+	int response_size = 2;
 	m_mdb->SendCommand(ADDRESS, STACKER);
 	m_mdb->Ack();
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
-	if (answer > 0 && m_count == 2)
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
+	if (answer > 0 && m_count == response_size)
 	{
 		if (m_buffer[0] & 0b10000000)
 		{
@@ -348,7 +339,7 @@ void BillValidator::stacker(int it)
 		m_bills_in_stacker = m_buffer[0] & 0b01111111;
 		return;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
 		return stacker(++it);
@@ -366,7 +357,7 @@ void BillValidator::escrow(bool accept, int it)
 	{
 		m_bill_in_escrow = false;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
 		return escrow(accept, ++it);

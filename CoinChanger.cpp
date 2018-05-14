@@ -114,7 +114,7 @@ bool CoinChanger::Reset()
 	else
 	{
 		m_resetCount = 0;
-		console << F("CC: NOT RESPONDING") << endl;
+		debug << F("CC: NOT RESPONDING") << endl;
 		return false;
 	}
 	return true;
@@ -155,7 +155,7 @@ bool CoinChanger::Dispense(unsigned long value)
 		else 
 			value++;
 		
-		//possible deadloop
+		//possible deadloop ? 
 		return Dispense(value);
 	}
 }
@@ -209,20 +209,21 @@ void CoinChanger::Print()
 
 int CoinChanger::poll()
 {
+	int response_size = 16;
 	bool reset = false;
 	bool payout_busy = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
 	m_mdb->Ack();
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK)
 	{
 		return 1;
 	}
 
 	//max of 16 bytes as response
-	for (int i = 0; i < m_count && i < 16; i++)
+	for (int i = 0; i < m_count && i < response_size; i++)
 	{
 		//coins dispensed manually
 		if (m_buffer[i] & 0b10000000)
@@ -263,57 +264,49 @@ int CoinChanger::poll()
 			switch (m_buffer[i])
 			{
 			case 1:
-				//escrow request
+				debug << F("CC: escrow request") << endl;
 				break;
 			case 2:
-				//changer payout busy
 				debug << F("CC: changer payout busy") << endl;
 				payout_busy = true;
 				break;
 			case 3:
-				//no credit
+				debug << F("CC: no credit") << endl;
 				break;
 			case 4:
-				//defective tube sensor
 				error << F("CC: defective tube sensor") << endl;
 				break;
 			case 5:
-				//double arrival
 				debug << F("CC: double arrival") << endl;
 				break;
 			case 6:
-				//acceptor unplugged
+				debug << F("CC: acceptor unplugged") << endl;
 				break;
 			case 7:
-				//tube jam
 				debug << F("CC: tube jam") << endl;
 				break;
 			case 8:
-				//ROM checksum error
 				warning << F("CC: ROM checksum error") << endl;
 				break;
 			case 9:
-				//coin routing error
 				debug << F("CC: coin routing error") << endl;
 				break;
 			case 10:
-				//changer busy
+				debug << F("CC: changer busy") << endl;
 				break;
 			case 11:
-				//changer was reset
+				debug << F("CC: changer was reset") << endl;
 				reset = true;
 				break;
 			case 12:
-				//coin jam
 				warning << F("CC: coin jam") << endl;
 				break;
 			case 13:
-				//possible credited coin removal
 				debug << F("CC: possible credited coin removal") << endl;
 				break;
 			default:
 				debug << F("CC: default: ");
-				for ( ; i < m_count; i++)
+				for ( ; i < m_count; i++) // print the bytes that could not be parsed
 					debug << m_buffer[i];
 				debug << endl;
 			}
@@ -331,9 +324,10 @@ int CoinChanger::poll()
 
 bool CoinChanger::setup(int it)
 {
+	int response_size = 23;
 	m_mdb->SendCommand(ADDRESS, SETUP);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 23);
-	if (answer >= 0 && m_count == 23)
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
+	if (answer >= 0 && m_count == response_size)
 	{
 		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
@@ -353,7 +347,7 @@ bool CoinChanger::setup(int it)
 		}
 		return true;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
 		return setup(++it);
@@ -364,9 +358,10 @@ bool CoinChanger::setup(int it)
 
 void CoinChanger::status(int it)
 {
+	int response_size = 18;
 	m_mdb->SendCommand(ADDRESS, STATUS);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 18);
-	if (answer != -1 && m_count == 18)
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
+	if (answer != -1 && m_count == response_size)
 	{
 		m_mdb->Ack();
 		//if bit is set, the tube is full
@@ -378,7 +373,7 @@ void CoinChanger::status(int it)
 		}
 		return;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
 		return status(++it);
@@ -396,7 +391,7 @@ void CoinChanger::type(int it)
 	m_mdb->SendCommand(ADDRESS, TYPE, out, 4);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		if (it < 5)
+		if (it < MAX_RESET)
 		{
 			delay(50);
 			return type(++it);
@@ -407,9 +402,10 @@ void CoinChanger::type(int it)
 
 void CoinChanger::expansion_identification(int it)
 {
+	int response_size = 33;
 	m_mdb->SendCommand(ADDRESS, EXPANSION, IDENTIFICATION);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 33);
-	if (answer > 0 && m_count == 33)
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
+	if (answer > 0 && m_count == response_size)
 	{
 		m_mdb->Ack();
 		// * 1L to overcome 16bit integer error
@@ -441,10 +437,10 @@ void CoinChanger::expansion_identification(int it)
 		}
 		return;
 	}
-	if (it < 5)
+	if (it < MAX_RESET)
 	{
 		delay(50);
-		expansion_identification(++it);
+		return expansion_identification(++it);
 	}
 	error << F("CC: EXP ID ERROR") << endl;
 }
@@ -468,21 +464,19 @@ void CoinChanger::expansion_payout(int value)
 //changer clears output data after an ack from controller
 void CoinChanger::expansion_payout_status(int it)
 {
+	int response_size = 16;
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_STATUS);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 16);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK) //payout busy
 	{
+		debug << F("CC: payout busy") << endl;
 		m_mdb->Ack();
-		if (it < 5)
-		{	
-			delay(500);		
-			expansion_payout_status(++it);
-		}
-		return;
+		delay(500);		
+		return expansion_payout_status(++it);
 	}
-	else if (answer > 0 && m_count == 16)
+	else if (answer > 0 && m_count == response_size)
 	{
-		for (int i = 0; i < 16; i++)
+		for (int i = 0; i < response_size; i++)
 		{
 			int count = m_buffer[i];
 			m_dispensed_value += m_coin_type_credit[i] * m_coin_scaling_factor * count;
@@ -494,11 +488,12 @@ void CoinChanger::expansion_payout_status(int it)
 //after the initial alternative_payout
 long CoinChanger::expansion_payout_value_poll()
 {
+	int response_size = 1;
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_VALUE_POLL);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 1);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK) //payout finished 
 		expansion_payout_status();
-	else if (answer > 0 && m_count == 1)
+	else if (answer > 0 && m_count == response_size)
 	{
 		return m_buffer[0];
 	}
@@ -508,16 +503,17 @@ long CoinChanger::expansion_payout_value_poll()
 //should be send by the vmc every 1-10 seconds
 void CoinChanger::expansion_send_diagnostic_status()
 {
+	int response_size = 2;
 	bool powering_up = false;
 	
 	m_mdb->SendCommand(ADDRESS, EXPANSION, SEND_DIAGNOSTIC_STATUS);
-	int answer = m_mdb->GetResponse(m_buffer, &m_count, 2);
+	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	
-	if (answer > 0 && m_count >= 2)
+	if (answer > 0 && m_count >= response_size)
 	{		
 		m_mdb->Ack();
 		
-		for (int i = 0; i < m_count / 2; i++)
+		for (int i = 0; i < m_count / response_size; i++)
 		{
 			switch (m_buffer[0])
 			{
