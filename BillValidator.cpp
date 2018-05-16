@@ -78,7 +78,7 @@ bool BillValidator::Reset()
 	else
 	{
 		m_resetCount = 0;
-		status << F("BV: NOT RESPONDING") << endl;
+		debug << F("BV: NOT RESPONDING") << endl;
 		return false;
 	}
 	return true;

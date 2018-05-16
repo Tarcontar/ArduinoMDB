@@ -42,6 +42,7 @@ bool CoinChanger::Update(unsigned long &change, int it)
 {
 	poll();
 	status();
+	change = m_change;
 	
 	if ((m_update_count % 50) == 0)
 	{
@@ -49,33 +50,7 @@ bool CoinChanger::Update(unsigned long &change, int it)
 		{
 			expansion_send_diagnostic_status();
 		}
-		//Dispense(15, 1);
 		m_update_count = 0;
-	}
-
-	if(m_feature_level >= 3)
-		expansion_payout_status();
-	
-	
-	if (m_dispensed_value >= m_value_to_dispense)
-	{
-		m_dispensed_value = 0;
-		m_value_to_dispense = 0;
-	}
-	else
-	{
-		//to make sure we send the sms only once
-		if (it == 0)
-			severe << F("CC: DISPENSE FAILED") << endl;
-		else
-			error << F("CC: DISPENSE FAILED") << endl;
-		return false;
-	}
-	
-	change = 0;
-	for (int i = 0; i < 16; i++)
-	{
-		change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 	}
 	
 	type();
@@ -86,6 +61,7 @@ bool CoinChanger::Update(unsigned long &change, int it)
 
 bool CoinChanger::Reset()
 {
+	//TODO: what if we are not level 3
 	expansion_send_diagnostic_status(); //waits for dispenser to start
 	
 	m_mdb->SendCommand(ADDRESS, RESET);
@@ -123,24 +99,36 @@ bool CoinChanger::Reset()
 
 bool CoinChanger::Dispense(unsigned long value)
 {
-	if (m_alternative_payout_supported)
+	status(); //to get actual available change
+	//to make sure we have a value even to 5c
+	if ((value % 5) > 0)
+		value += 5 - (value % 5);
+
+	if (m_change < value)
 	{
-		m_value_to_dispense += value;
-		char val = value / m_coin_scaling_factor;
-		expansion_payout(val);
+		Dispense(m_change);
+		return false;
+	}
+	
+	m_value_to_dispense = value;
+	int val = value / m_coin_scaling_factor;
+
+	if (m_alternative_payout_supported && expansion_payout(val))
+	{
 		return true;
 	}
 	else
 	{
 		warning << F("CC: OLD DISPENSE FUNCTION USED") << endl;
-		for (int i = 15; i >= 0; i--)
+		for (int i = 15; i >= 0; i--) // since we have 6 tubes
 		{
 			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
 			count = min(count, m_tube_status[i]); //check if sufficient coins in tube
-			if (Dispense(i, count))
+			if (count <= 0)
+				continue;
+			if (dispense(i, count))
 			{
 				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
-				m_value_to_dispense += val;
 				value -= val;
 			}
 			if (value <= 0)
@@ -149,19 +137,17 @@ bool CoinChanger::Dispense(unsigned long value)
 		
 		if (value == 0)
 			return true;
-		
-		if (value < 5)
-			value = 5;
-		else 
-			value++;
-		
-		//possible deadloop ? 
+
+		value += 5;
 		return Dispense(value);
 	}
 }
 
-bool CoinChanger::Dispense(int coin, int count)
+bool CoinChanger::dispense(int coin, int count)
 {
+	coin = coin % 6; //since we have only 6 tubes
+	if (count > m_tube_status[coin])
+		return false;
 	int out = (count << 4) | coin;
 	m_mdb->SendCommand(ADDRESS, DISPENSE, &out, 1);
 	if (m_mdb->GetResponse() != ACK)
@@ -169,6 +155,7 @@ bool CoinChanger::Dispense(int coin, int count)
 		warning << F("CC: DISPENSE FAILED") << endl;
 		return false;
 	}
+	poll(); //wait for dispense to finish
 	return true;
 }
 
@@ -212,6 +199,7 @@ int CoinChanger::poll()
 	int response_size = 16;
 	bool reset = false;
 	bool payout_busy = false;
+	bool busy = false;
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
@@ -232,8 +220,7 @@ int CoinChanger::poll()
 			int count = (m_buffer[i] & 0b01110000) >> 4;
 			int type = m_buffer[i] & 0b00001111;
 			int coins_in_tube = m_buffer[i + 1];
-			
-			m_dispensed_value += m_coin_type_credit[type] * m_coin_scaling_factor * count;
+
 			i++; //cause we used 2 bytes
 		}
 		//coins deposited
@@ -293,9 +280,10 @@ int CoinChanger::poll()
 				break;
 			case 10:
 				debug << F("CC: changer busy") << endl;
+				busy = true;
 				break;
 			case 11:
-				debug << F("CC: changer was reset") << endl;
+				//debug << F("CC: changer was reset") << endl;
 				reset = true;
 				break;
 			case 12:
@@ -314,9 +302,9 @@ int CoinChanger::poll()
 	}
 	if (reset)
 		return JUST_RESET;
-	if (payout_busy)
+	if (busy || payout_busy)
 	{
-		delay(2000);
+		delay(500);
 		return poll();
 	}
 	return 1;
@@ -343,7 +331,7 @@ bool CoinChanger::setup(int it)
 		if (m_feature_level >= 3)
 		{
 			expansion_identification();
-			expansion_feature_enable(m_optional_features);
+			expansion_feature_enable();
 		}
 		return true;
 	}
@@ -370,6 +358,11 @@ void CoinChanger::status(int it)
 		{
 			//number of coins in the tube
 			m_tube_status[i] = m_buffer[2 + i];
+		}
+		m_change = 0;
+		for (int i = 0; i < 16; i++)
+		{
+			m_change += m_coin_type_credit[i] * m_tube_status[i] * m_coin_scaling_factor;
 		}
 		return;
 	}
@@ -445,18 +438,40 @@ void CoinChanger::expansion_identification(int it)
 	error << F("CC: EXP ID ERROR") << endl;
 }
 
-void CoinChanger::expansion_feature_enable(int features)
+void CoinChanger::expansion_feature_enable(int it)
 {
-	int out[] = { 0xff, 0xff, 0xff, 0xff };
+	int out[] = { 0x00, 0x00, 0x00, 0x03 };
 	m_mdb->SendCommand(ADDRESS, EXPANSION, FEATURE_ENABLE, out, 4);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		if (it < MAX_RESET)
+		{
+			delay(50);
+			return expansion_feature_enable(++it);
+		}
+		error << F("CC: EXP FEATURE ENABLE ERROR") << endl;
+	}
 }
 
-void CoinChanger::expansion_payout(int value)
+bool CoinChanger::expansion_payout(int value)
 {
-	//expansion_feature_enable(1);
-	int val = 1;
-	//m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &val, 1);
-	Dispense(15, 1);
+	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &value, 1);
+	if (m_mdb->GetResponse() != ACK)
+	{
+		warning << "CC: dispense failed" << endl;
+		return false;
+	}
+	expansion_payout_value_poll();
+	
+	debug << "CC: dispense: " << m_value_to_dispense << " -> " << m_dispensed_value << endl;
+	
+	if (m_value_to_dispense > m_dispensed_value)
+	{
+		m_value_to_dispense -= m_dispensed_value;
+		return false;
+	}
+
+	return true;
 }
 
 //number of each coin dispensed since last alternative payout (expansion_payout)
@@ -467,37 +482,44 @@ void CoinChanger::expansion_payout_status(int it)
 	int response_size = 16;
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_STATUS);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
-	if (answer == ACK) //payout busy
+	if (answer == ACK)
 	{
 		debug << F("CC: payout busy") << endl;
-		m_mdb->Ack();
 		delay(500);		
-		return expansion_payout_status(++it);
+		expansion_payout_status(++it);
 	}
-	else if (answer > 0 && m_count == response_size)
+	else if (answer > 0 && m_count > 0)
 	{
-		for (int i = 0; i < response_size; i++)
+		m_mdb->Ack(); //to clear data 
+		debug << "CC: payd out: ";
+ 		for (int i = 0; i < m_count; i++)
 		{
-			int count = m_buffer[i];
-			m_dispensed_value += m_coin_type_credit[i] * m_coin_scaling_factor * count;
+			debug << (int)m_buffer[i] << " ";
+			m_dispensed_value += m_coin_type_credit[i] * m_coin_scaling_factor * (int)m_buffer[i];
 		}
+		debug << endl;
 	}
 }
 
 //scaled value that indicates the amount of change payd out since last poll or
 //after the initial alternative_payout
-long CoinChanger::expansion_payout_value_poll()
+void CoinChanger::expansion_payout_value_poll()
 {
 	int response_size = 1;
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT_VALUE_POLL);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK) //payout finished 
+	{
+		m_mdb->Ack();
 		expansion_payout_status();
+	}
 	else if (answer > 0 && m_count == response_size)
 	{
-		return m_buffer[0];
+		m_mdb->Ack();
+		//debug << (int)m_buffer[0] << "-";
+		delay(50);
+		expansion_payout_value_poll();
 	}
-	return 0;
 }
 
 //should be send by the vmc every 1-10 seconds
@@ -535,7 +557,7 @@ void CoinChanger::expansion_send_diagnostic_status()
 				switch (m_buffer[1])
 				{
 				case 10:
-					debug <<  F("CC: manual fill / payout active") << endl;
+					console <<  F("CC: manual fill / payout active") << endl;
 					break;
 				case 20:
 					debug <<  F("CC: new inventory information available") << endl;
@@ -666,7 +688,10 @@ void CoinChanger::expansion_send_diagnostic_status()
 		if (powering_up)
 		{
 			delay(1000);
+			debug << "test" << endl;
 			expansion_send_diagnostic_status();
 		}
 	}
+	else
+		warning << F("CC: diagnostic status failed") << endl;
 }

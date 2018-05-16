@@ -10,8 +10,8 @@
 #define TIME_SETUP 	200
 
 #define ACK 	0x100
-#define RET 	0x1AA
-#define NAK 	0x1FF
+#define RET 	0xAA
+#define NAK 	0xFF
 
 #define INTER_BYTE_TIME 	1
 #define RESPONSE_TIME 		5

@@ -26,7 +26,7 @@ void MDBSerial::hardReset()
 
 void MDBSerial::Ack()
 {
-	m_uart->write9bit(ACK);
+	m_uart->write9bit(0x00); //need 0 since ACK is 0x100 and doesnt work
 }
 
 void MDBSerial::Nak()
@@ -48,7 +48,7 @@ void MDBSerial::SendCommand(int address, int cmd,  int subCmd, int *data, int da
 {
 	char sum = 0;
 	m_uart->flush();
-	m_uart->write9bit(address | cmd | 0x100);
+	m_uart->write9bit(0x100 | address | cmd);
 	sum += address | cmd;
 	
 	if (subCmd >= 0)
