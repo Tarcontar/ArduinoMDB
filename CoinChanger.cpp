@@ -253,7 +253,7 @@ int CoinChanger::poll()
 				debug << F("CC: escrow request") << endl;
 				break;
 			case 2:
-				debug << F("CC: changer payout busy") << endl;
+				warning << F("CC: changer payout busy") << endl;
 				payout_busy = true;
 				break;
 			case 3:
@@ -687,7 +687,6 @@ void CoinChanger::expansion_send_diagnostic_status()
 		if (powering_up)
 		{
 			delay(1000);
-			debug << "test" << endl;
 			expansion_send_diagnostic_status();
 		}
 	}
