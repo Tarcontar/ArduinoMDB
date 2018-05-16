@@ -109,7 +109,6 @@ bool CoinChanger::Dispense(unsigned long value)
 		Dispense(m_change);
 		return false;
 	}
-	
 	m_value_to_dispense = value;
 	int val = value / m_coin_scaling_factor;
 
@@ -122,24 +121,24 @@ bool CoinChanger::Dispense(unsigned long value)
 		warning << F("CC: OLD DISPENSE FUNCTION USED") << endl;
 		for (int i = 15; i >= 0; i--) // since we have 6 tubes
 		{
-			int count = value / (m_coin_type_credit[i] * m_coin_scaling_factor);
+			int count = m_value_to_dispense / (m_coin_type_credit[i] * m_coin_scaling_factor);
 			count = min(count, m_tube_status[i]); //check if sufficient coins in tube
 			if (count <= 0)
 				continue;
 			if (dispense(i, count))
 			{
 				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
-				value -= val;
+				m_value_to_dispense -= val;
 			}
-			if (value <= 0)
+			if (m_value_to_dispense <= 0)
 				break;
 		}
 		
-		if (value == 0)
+		if (m_value_to_dispense == 0)
 			return true;
 
-		value += 5;
-		return Dispense(value);
+		m_value_to_dispense += 5;
+		return Dispense(m_value_to_dispense);
 	}
 }
 
@@ -458,12 +457,12 @@ bool CoinChanger::expansion_payout(int value)
 	m_mdb->SendCommand(ADDRESS, EXPANSION, PAYOUT, &value, 1);
 	if (m_mdb->GetResponse() != ACK)
 	{
-		warning << "CC: dispense failed" << endl;
+		warning << F("CC: dispense failed") << endl;
 		return false;
 	}
 	expansion_payout_value_poll();
 	
-	debug << "CC: dispense: " << m_value_to_dispense << " -> " << m_dispensed_value << endl;
+	debug << F("CC: dispense: ") << m_value_to_dispense << " -> " << m_dispensed_value << endl;
 	
 	if (m_value_to_dispense > m_dispensed_value)
 	{
@@ -491,7 +490,7 @@ void CoinChanger::expansion_payout_status(int it)
 	else if (answer > 0 && m_count > 0)
 	{
 		m_mdb->Ack(); //to clear data 
-		debug << "CC: payd out: ";
+		debug << F("CC: payd out: ");
  		for (int i = 0; i < m_count; i++)
 		{
 			debug << (int)m_buffer[i] << " ";
