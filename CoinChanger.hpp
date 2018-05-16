@@ -13,7 +13,7 @@ public:
 	CoinChanger(MDBSerial &mdb);
 
 	//return false if we encounter sth so we cant go on
-	bool Update(unsigned long &change, int it = 0);
+	void Update(unsigned long &change);
 	bool Reset();
 	bool Dispense(unsigned long value);
 	void Print();

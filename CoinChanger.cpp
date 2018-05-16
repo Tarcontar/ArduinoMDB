@@ -38,7 +38,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 	m_dispensed_value = 0;
 }
 
-bool CoinChanger::Update(unsigned long &change, int it)
+void CoinChanger::Update(unsigned long &change)
 {
 	poll();
 	status();
@@ -56,7 +56,6 @@ bool CoinChanger::Update(unsigned long &change, int it)
 	type();
 	
 	m_update_count++;
-	return true; 
 }
 
 bool CoinChanger::Reset()
@@ -119,6 +118,7 @@ bool CoinChanger::Dispense(unsigned long value)
 	else
 	{
 		warning << F("CC: OLD DISPENSE FUNCTION USED") << endl;
+		bool dispensed_anything = false;
 		for (int i = 15; i >= 0; i--) // since we have 6 tubes
 		{
 			int count = m_value_to_dispense / (m_coin_type_credit[i] * m_coin_scaling_factor);
@@ -129,6 +129,7 @@ bool CoinChanger::Dispense(unsigned long value)
 			{
 				unsigned long val = count * m_coin_type_credit[i] * m_coin_scaling_factor;
 				m_value_to_dispense -= val;
+				dispensed_anything = true;
 			}
 			if (m_value_to_dispense <= 0)
 				break;
@@ -136,10 +137,14 @@ bool CoinChanger::Dispense(unsigned long value)
 		
 		if (m_value_to_dispense == 0)
 			return true;
-
-		m_value_to_dispense += 5;
-		return Dispense(m_value_to_dispense);
+		
+		if (dispensed_anything)
+		{
+			m_value_to_dispense += 5;
+			return Dispense(m_value_to_dispense);
+		}
 	}
+	return false;
 }
 
 bool CoinChanger::dispense(int coin, int count)
