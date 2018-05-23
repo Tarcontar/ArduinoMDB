@@ -49,38 +49,50 @@ bool BillValidator::Update(unsigned long cc_change)
 
 bool BillValidator::Reset()
 {
-	m_mdb->SendCommand(ADDRESS, RESET);
-	if (m_mdb->GetResponse() == ACK)
+	int count_1 = 0;
+	if (poll() < 0)
 	{
-		int count = 0;
-		while (poll() != JUST_RESET)
-		{
-			if (count > MAX_RESET_POLL) return false;
-			count++;
-		}
-		if (!setup())
-			return false;
-		security();
-		//Expansion(0x00); //ID
-		//Expansion(0x01); //Feature
-		//Expansion(0x05); //Status
-		Print();
-		debug << F("BV: RESET COMPLETED") << endl;
-		return true;
-	}
-	debug << F("BV: RESET FAILED") << endl;
-	
-	if (m_resetCount < MAX_RESET)
-	{
-		m_resetCount++;
-		return Reset();
-	}
-	else
-	{
-		m_resetCount = 0;
-		debug << F("BV: NOT RESPONDING") << endl;
+		debug << F("BV: NOT CONNECTED") << endl;
 		return false;
 	}
+	
+	//wait for BV to power up
+	while (poll() > 0 && count_1 < MAX_RESET_POLL)
+	{
+		m_mdb->SendCommand(ADDRESS, RESET);
+		if (m_mdb->GetResponse() == ACK)
+		{
+			int count_2 = 0;
+			while(poll() != JUST_RESET)
+			{
+				if (count_2 > MAX_RESET_POLL)
+				{
+					debug << F("BV: NO JUST RESET RECEIVED") << endl;
+					return false;
+				}
+				delay(100);
+				count_2++;
+			}
+			debug << F("BV: RESET COMPLETED") << endl;
+			return true;
+		}
+		count_1++;
+		delay(100);
+	}
+	debug << F("BV: RESET FAILED") << endl;
+	return false;
+}
+
+bool BillValidator::init()
+{
+	if (!setup())
+		return false;
+	security();
+	//Expansion(0x00); //ID
+	//Expansion(0x01); //Feature
+	//Expansion(0x05); //Status
+	Print();
+	debug << F("BV: INIT COMPLETED") << endl;
 	return true;
 }
 
@@ -105,12 +117,16 @@ int BillValidator::poll()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK)
 	{
 		return 1;
 	}
+	
+	if (answer > 0 && m_count > 0)
+		m_mdb->Ack();
+	else
+		return -1;
 	
 	//max of 16 bytes as response
 	for (int i = 0; i < m_count && i < response_size; i++)
@@ -255,7 +271,7 @@ int BillValidator::poll()
 			}
 		}
 	}
-	if (reset)
+	if (reset && init())
 		return JUST_RESET;
 	return 1;
 }
@@ -266,11 +282,10 @@ bool BillValidator::setup(int it)
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, SETUP);
-	m_mdb->Ack();
-	delay(50);
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer > 0 && m_count == response_size)
 	{	
+		m_mdb->Ack();
 		m_feature_level = m_buffer[0];
 		m_country = m_buffer[1] << 8 | m_buffer[2];
 		m_bill_scaling_factor = m_buffer[3] << 8 | m_buffer[4];
@@ -326,10 +341,10 @@ void BillValidator::stacker(int it)
 {
 	int response_size = 2;
 	m_mdb->SendCommand(ADDRESS, STACKER);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer > 0 && m_count == response_size)
 	{
+		m_mdb->Ack();
 		if (m_buffer[0] & 0b10000000)
 		{
 			m_full = true;

@@ -11,10 +11,10 @@ class CoinChanger : public MDBDevice
 {
 public:
 	CoinChanger(MDBSerial &mdb);
-
-	//return false if we encounter sth so we cant go on
-	void Update(unsigned long &change);
+	
 	bool Reset();
+
+	void Update(unsigned long &change);
 	bool Dispense(unsigned long value);
 	void Print();
 	
@@ -23,9 +23,10 @@ public:
 	inline void ClearCredit() { m_credit = 0; }
 	
 private:
+	bool init();
 	int poll();
 	bool setup(int it = 0);
-	void status(int it = 0);
+	void tube_status(int it = 0);
 	void type(int it = 0);
 	
 	bool dispense(int coin, int count);

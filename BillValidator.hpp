@@ -16,6 +16,7 @@ public:
 	inline void ClearCredit() { m_credit = 0; }
 
 private:
+	bool init();
 	int poll();
 	bool setup(int it = 0);
 	void security(int it = 0);

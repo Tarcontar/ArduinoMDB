@@ -41,7 +41,7 @@ CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)
 void CoinChanger::Update(unsigned long &change)
 {
 	poll();
-	status();
+	tube_status();
 	change = m_change;
 	
 	if ((m_update_count % 50) == 0)
@@ -60,45 +60,54 @@ void CoinChanger::Update(unsigned long &change)
 
 bool CoinChanger::Reset()
 {
-	//TODO: what if we are not level 3
-	expansion_send_diagnostic_status(); //waits for dispenser to start
-	
-	m_mdb->SendCommand(ADDRESS, RESET);
-	if ((m_mdb->GetResponse() == ACK))
+	int count_1 = 0;
+	if (poll() < 0)
 	{
-		int count = 0;
-		while (poll() != JUST_RESET) 
-		{
-			if (count > MAX_RESET_POLL) return false;
-			count++;
-		}
-		if (!setup())
-			return false;
-		status();
-		Print();
-		debug << F("CC: RESET COMPLETED") << endl;
-		return true;
-	}
-	debug << F("CC: RESET FAILED") << endl;
-
-	if (m_resetCount < MAX_RESET)
-	{
-		m_resetCount++;
-		return Reset();
-	}
-	else
-	{
-		m_resetCount = 0;
-		debug << F("CC: NOT RESPONDING") << endl;
+		debug << F("CC: NOT CONNECTED") << endl;
 		return false;
 	}
+
+	//wait for CC to power up
+	while (poll() > 0 && count_1 < MAX_RESET_POLL)
+	{
+		m_mdb->SendCommand(ADDRESS, RESET);
+		if ((m_mdb->GetResponse() == ACK))
+		{	
+			int count_2 = 0;
+			while (poll() != JUST_RESET) 
+			{
+				if (count_2 > MAX_RESET_POLL)
+				{
+					debug << F("CC: NO JUST RESET RECEIVED") << endl;
+					return false;
+				}
+				delay(100);
+				count_2++;
+			}
+			debug << F("CC: RESET COMPLETED") << endl;
+			return true;
+		}
+		count_1++;
+		delay(100);
+	}
+	debug << F("CC: RESET FAILED") << endl;
+	return false;
+}
+
+bool CoinChanger::init()
+{
+	if (!setup())
+		return false;
+	tube_status();
+	Print();
+	debug << F("CC: INIT COMPLETED") << endl;
 	return true;
 }
 
 
 bool CoinChanger::Dispense(unsigned long value)
 {
-	status(); //to get actual available change
+	tube_status(); //to get actual available change
 	//to make sure we have a value even to 5c
 	if ((value % 5) > 0)
 		value += 5 - (value % 5);
@@ -150,6 +159,7 @@ bool CoinChanger::Dispense(unsigned long value)
 bool CoinChanger::dispense(int coin, int count)
 {
 	coin = coin % 6; //since we have only 6 tubes
+	tube_status();
 	if (count > m_tube_status[coin])
 		return false;
 	int out = (count << 4) | coin;
@@ -207,13 +217,20 @@ int CoinChanger::poll()
 	for (int i = 0; i < 64; i++)
 		m_buffer[i] = 0;
 	m_mdb->SendCommand(ADDRESS, POLL);
-	m_mdb->Ack();
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK)
 	{
+		debug << F("CC: poll got ack") << endl;
 		return 1;
 	}
 
+	if (answer > 0 && m_count > 0)
+	{
+		m_mdb->Ack();
+	}
+	else
+		return -1;
+	
 	//max of 16 bytes as response
 	for (int i = 0; i < m_count && i < response_size; i++)
 	{
@@ -304,7 +321,7 @@ int CoinChanger::poll()
 			}
 		}
 	}
-	if (reset)
+	if (reset && init())	
 		return JUST_RESET;
 	if (busy || payout_busy)
 	{
@@ -348,7 +365,7 @@ bool CoinChanger::setup(int it)
 	return false;
 }
 
-void CoinChanger::status(int it)
+void CoinChanger::tube_status(int it)
 {
 	int response_size = 18;
 	m_mdb->SendCommand(ADDRESS, STATUS);
@@ -373,7 +390,7 @@ void CoinChanger::status(int it)
 	if (it < MAX_RESET)
 	{
 		delay(50);
-		return status(++it);
+		return tube_status(++it);
 	}
 	warning << F("CC: STATUS ERROR") << endl;
 }
@@ -455,6 +472,7 @@ void CoinChanger::expansion_feature_enable(int it)
 		}
 		error << F("CC: EXP FEATURE ENABLE ERROR") << endl;
 	}
+	m_mdb->Ack();
 }
 
 bool CoinChanger::expansion_payout(int value)
@@ -514,7 +532,6 @@ void CoinChanger::expansion_payout_value_poll()
 	int answer = m_mdb->GetResponse(m_buffer, &m_count, response_size);
 	if (answer == ACK) //payout finished 
 	{
-		m_mdb->Ack();
 		expansion_payout_status();
 	}
 	else if (answer > 0 && m_count == response_size)
