@@ -325,8 +325,9 @@ int CoinChanger::poll()
 		return JUST_RESET;
 	if (busy || payout_busy)
 	{
-		delay(500);
-		return poll();
+		//delay(500);
+		//return poll();
+		delay(50);
 	}
 	return 1;
 }

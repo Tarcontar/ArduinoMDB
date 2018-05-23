@@ -50,11 +50,19 @@ bool BillValidator::Update(unsigned long cc_change)
 bool BillValidator::Reset()
 {
 	int count_1 = 0;
-	if (poll() < 0)
+	int p = 0;
+	while ((p = poll()) < 0)
 	{
-		debug << F("BV: NOT CONNECTED") << endl;
-		return false;
+		if (count_1 > MAX_RESET_POLL)
+		{
+			debug << F("BV: NOT CONNECTED") << endl;
+			return false;
+		}
+		delay(50);
+		count_1++;
 	}
+	
+	count_1 = 0;
 	
 	//wait for BV to power up
 	while (poll() > 0 && count_1 < MAX_RESET_POLL)
@@ -122,7 +130,7 @@ int BillValidator::poll()
 	{
 		return 1;
 	}
-	
+
 	if (answer > 0 && m_count > 0)
 		m_mdb->Ack();
 	else
