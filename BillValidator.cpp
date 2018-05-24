@@ -28,7 +28,7 @@ bool BillValidator::Update(unsigned long cc_change)
 	poll();
 	stacker();
 
-	int b = 0;
+	int b = 0x00;
 
 	if (cc_change > 2500) //more than 25€
 		bitSet(b, 2); //enable 20€ bill
@@ -49,42 +49,42 @@ bool BillValidator::Update(unsigned long cc_change)
 
 bool BillValidator::Reset()
 {
-	int count_1 = 0;
-	int p = 0;
-	while ((p = poll()) < 0)
+	int count = 0;
+	//wait for BV to response
+	while (poll() < 0)
 	{
-		if (count_1 > MAX_RESET_POLL)
+		if (count > MAX_RESET_POLL)
 		{
 			debug << F("BV: NOT CONNECTED") << endl;
 			return false;
 		}
-		delay(50);
-		count_1++;
+		delay(100);
+		count++;
 	}
 	
-	count_1 = 0;
+	count = 0;
 	
 	//wait for BV to power up
-	while (poll() > 0 && count_1 < MAX_RESET_POLL)
+	while (poll() > 0 && count < MAX_RESET_POLL)
 	{
 		m_mdb->SendCommand(ADDRESS, RESET);
 		if (m_mdb->GetResponse() == ACK)
 		{
-			int count_2 = 0;
+			int count2 = 0;
 			while(poll() != JUST_RESET)
 			{
-				if (count_2 > MAX_RESET_POLL)
+				if (count2 > MAX_RESET_POLL)
 				{
 					debug << F("BV: NO JUST RESET RECEIVED") << endl;
 					return false;
 				}
 				delay(100);
-				count_2++;
+				count2++;
 			}
 			debug << F("BV: RESET COMPLETED") << endl;
 			return true;
 		}
-		count_1++;
+		count++;
 		delay(100);
 	}
 	debug << F("BV: RESET FAILED") << endl;

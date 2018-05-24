@@ -60,34 +60,42 @@ void CoinChanger::Update(unsigned long &change)
 
 bool CoinChanger::Reset()
 {
-	int count_1 = 0;
-	if (poll() < 0)
+	int count = 0;
+	//wait for CC to response
+	while (poll() < 0)
 	{
-		debug << F("CC: NOT CONNECTED") << endl;
-		return false;
+		if (count > MAX_RESET_POLL)
+		{
+			debug << F("CC: NOT CONNECTED") << endl;
+			return false;
+		}
+		delay(100);
+		count++;
 	}
+	
+	count = 0;
 
 	//wait for CC to power up
-	while (poll() > 0 && count_1 < MAX_RESET_POLL)
+	while (poll() > 0 && count < MAX_RESET_POLL)
 	{
 		m_mdb->SendCommand(ADDRESS, RESET);
 		if ((m_mdb->GetResponse() == ACK))
 		{	
-			int count_2 = 0;
+			int count2 = 0;
 			while (poll() != JUST_RESET) 
 			{
-				if (count_2 > MAX_RESET_POLL)
+				if (count2 > MAX_RESET_POLL)
 				{
 					debug << F("CC: NO JUST RESET RECEIVED") << endl;
 					return false;
 				}
 				delay(100);
-				count_2++;
+				count2++;
 			}
 			debug << F("CC: RESET COMPLETED") << endl;
 			return true;
 		}
-		count_1++;
+		count++;
 		delay(100);
 	}
 	debug << F("CC: RESET FAILED") << endl;
