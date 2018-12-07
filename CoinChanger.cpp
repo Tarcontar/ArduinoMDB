@@ -1,4 +1,4 @@
-#include "CoinChanger.hpp"
+#include "CoinChanger.h"
 #include <Arduino.h>
 
 CoinChanger::CoinChanger(MDBSerial &mdb) : MDBDevice(mdb)

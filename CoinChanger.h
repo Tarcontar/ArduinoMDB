@@ -1,6 +1,6 @@
 #pragma once
 
-#include "MDBDevice.hpp"
+#include "MDBDevice.h"
 
 #define PAYOUT 						0x02
 #define PAYOUT_STATUS 	 			0x03

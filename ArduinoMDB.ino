@@ -1,7 +1,7 @@
-#include <CoinChanger.h>
-#include <MDBSerial.h>
 #include <SoftwareSerial.h>
-#include <BillValidator.h>
+#include "BillValidator.h"
+#include "CoinChanger.h"
+#include "MDBSerial.h"
 
 MDBSerial mdb(1);
 CoinChanger changer(mdb);
@@ -13,16 +13,15 @@ void setup()
 {
   serial.begin(9600);
   serial.println("test");
-  changer.SetSerial(serial);
   changer.Reset();
-  validator.SetSerial(serial);
   validator.Reset();
   serial.println("VMC###############");
 }
 
 void loop()
 {
-  unsigned long change = changer.Update();
+  unsigned long change;
+  changer.Update(change);
   validator.Update(change);
   delay(200);
 }

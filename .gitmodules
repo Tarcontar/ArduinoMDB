@@ -1,0 +1,6 @@
+[submodule "UART"]
+	path = UART
+	url = https://github.com/Tarcontar/UART.git
+[submodule "Logger"]
+	path = Logger
+	url = https://github.com/Tarcontar/Logger.git

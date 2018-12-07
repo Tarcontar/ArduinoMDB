@@ -1,7 +1,7 @@
 #pragma once
 
-#include "MDBSerial.hpp"
-#include "Logger.hpp"
+#include "MDBSerial.h"
+#include "Logger.h"
 #include <Arduino.h>
 
 #define RESET 					0x00
